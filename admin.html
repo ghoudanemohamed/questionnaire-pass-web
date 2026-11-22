@@ -174,8 +174,10 @@ async function boot() {
 }
 function login(msg = "") {
   root.innerHTML = `<form class="login card stack" id="lf"><h1>Administration</h1>
-    <div><label class="f" for="p">Mot de passe</label><input type="password" id="p" required autofocus></div>
+    <div><label class="f" for="p">Mot de passe</label>
+      <div style="display:flex;gap:8px;align-items:center"><input type="password" id="p" required autofocus style="flex:1;min-width:0"><button class="btn sm" type="button" id="eye" aria-pressed="false">Afficher</button></div></div>
     <div class="err" role="alert">${esc(msg)}</div><button class="btn primary" type="submit">Entrer</button></form>`;
+  $("#eye").onclick = () => { const p = $("#p"), show = p.type === "password"; p.type = show ? "text" : "password"; $("#eye").textContent = show ? "Masquer" : "Afficher"; $("#eye").setAttribute("aria-pressed", show); p.focus(); };
   $("#lf").onsubmit = e => {
     e.preventDefault(); pwd = $("#p").value;
     try { sessionStorage.setItem("qpwd", pwd); } catch (x) {}
