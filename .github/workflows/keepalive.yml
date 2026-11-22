@@ -1,0 +1,19 @@
+name: Garder la base active
+
+# Supabase (offre gratuite) met un projet en pause après environ une semaine sans activité.
+# Cet appel quotidien, sans aucune donnée personnelle, évite la pause.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appeler la base
+        run: |
+          curl --fail --silent --show-error --max-time 30 \
+            -X POST "https://xycemngwdambyljyvqgm.supabase.co/rest/v1/rpc/public_state" \
+            -H "apikey: sb_publishable_LSCfQ_5qTC4uMDgtlPyPrg_MvdJ0nCl" \
+            -H "Content-Type: application/json" -d '{}'
