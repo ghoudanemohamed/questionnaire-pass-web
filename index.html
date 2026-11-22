@@ -118,6 +118,15 @@ function infoError(w) {
 function intro() {
   app.innerHTML = `<h1>Questionnaire</h1><p class="sub">Renseigne tes informations : le questionnaire de ton rôle s'affiche ensuite, après la vidéo s'il y en a une.</p>
   <form id="i" class="stack" novalidate>${infoCard()}<div class="err" id="ierr" role="alert"></div><button class="btn" type="submit" id="go">Continuer</button></form>`;
+  /* Brouillon : les informations saisies reviennent après un rafraîchissement de la page */
+  const form_ = document.getElementById("i"), DRAFT = "qp-draft";
+  try {
+    const d = JSON.parse(sessionStorage.getItem(DRAFT) || "{}");
+    for (const k of ["company", "last", "first", "phone", "email"]) if (d[k]) form_.elements[k].value = d[k];
+    if (d.role) { const r = form_.querySelector(`input[name=role][value="${d.role}"]`); if (r && !r.disabled) r.checked = true; }
+  } catch (_) {}
+  const saveDraft = () => { try { sessionStorage.setItem(DRAFT, JSON.stringify(getWho(new FormData(form_)))); } catch (_) {} };
+  form_.addEventListener("input", saveDraft); form_.addEventListener("change", saveDraft);
   document.getElementById("i").onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -204,6 +213,7 @@ async function send(e) {
       kept = {}; questions.forEach(q => { if (!d.wrong.includes(q.id) && q.id in responses) kept[q.id] = responses[q.id]; });
       form(d.wrong); window.scrollTo(0, 0); return;
     }
+    try { sessionStorage.removeItem("qp-draft"); } catch (_) {}
     app.innerHTML = `<div class="empty"><strong>Bravo, ${esc(who.first)}</strong>Toutes tes réponses sont justes${tries>1?" après "+tries+" essais":""}.
       <div class="code" aria-label="Ton code">${esc(d.code)}</div><span class="meta">Ton code personnel, valable 6 mois : garde-le</span>
       <div style="margin-top:24px"><button class="btn" id="pdf" type="button">Télécharger mon pass en PDF</button></div><div class="err" id="pdferr" role="alert"></div></div>`;
