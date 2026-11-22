@@ -229,8 +229,17 @@ function shell() {
       <button role="tab" data-tab="results">Réponses<span class="count" id="cR"></span></button>
     </nav><main id="view"></main>`;
   $("#copy").onclick = async () => {
-    try { await navigator.clipboard.writeText(link); $("#copy").textContent = "Copié"; setTimeout(() => { const c = $("#copy"); if (c) c.textContent = "Copier"; }, 1500); }
-    catch (e) { prompt("Copie ce lien :", link); }
+    const done = txt => { $("#copy").textContent = txt; setTimeout(() => { const c = $("#copy"); if (c) c.textContent = "Copier"; }, 2000); };
+    try { await navigator.clipboard.writeText(link); return done("Copié"); } catch (_) {}
+    /* Secours : copie par sélection (marche sans autorisation du navigateur), sinon le lien est sélectionné */
+    const ta = document.createElement("textarea");
+    ta.value = link; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, link.length);
+    let ok = false; try { ok = document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+    if (ok) return done("Copié");
+    const r = document.createRange(); r.selectNodeContents($("#link")); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    done("Fais Ctrl+C");
   };
   $("#toggle").onclick = async () => {
     if (!state.active && !state.questions.length) { alert("Crée d'abord au moins une question."); return; }
