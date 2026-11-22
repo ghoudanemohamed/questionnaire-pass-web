@@ -229,6 +229,19 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- Retire un participant : son pass devient inconnu (le QR ne le reconnaît plus). Il devra repasser le test.
+create or replace function admin_revoke(p_pwd text, p_code text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare c text := upper(regexp_replace(coalesce(p_code, ''), '[\s-]', '', 'g'));
+begin
+  if not _admin_ok(p_pwd) then return jsonb_build_object('error', 'auth'); end if;
+  delete from answers where upper(code) = c;
+  update saved set answers = coalesce(
+    (select jsonb_agg(a) from jsonb_array_elements(answers) a where upper(a->>'code') <> c), '[]'::jsonb)
+  where exists (select 1 from jsonb_array_elements(answers) a where upper(a->>'code') = c);
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- ---- Questionnaires enregistrés ----
 create or replace function _saved_list() returns jsonb language sql security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name, 'at', at,
@@ -311,6 +324,6 @@ grant execute on function
   submit_answers(text, text, text, text, text, text, jsonb, int),
   pass_status(text),
   admin_state(text), admin_save_group(text, text, jsonb, boolean, text), admin_verify(text, text),
-  admin_clear_answers(text, text), admin_saved_list(text), admin_save_current(text, text),
+  admin_clear_answers(text, text), admin_revoke(text, text), admin_saved_list(text), admin_save_current(text, text),
   admin_open_saved(text, text), admin_delete_saved(text, text)
 to anon;

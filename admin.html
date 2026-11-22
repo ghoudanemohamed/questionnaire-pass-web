@@ -155,6 +155,7 @@ async function api(method, path, body) {
   if (path === "/api/admin/state") fn = "admin_state";
   else if ((m = path.match(/^\/api\/admin\/config\/(\w+)$/))) { fn = "admin_save_group"; Object.assign(args, { p_role: m[1], p_questions: body.questions, p_active: body.active, p_video: body.video || "" }); }
   else if ((m = path.match(/^\/api\/admin\/answers\/(\w+)$/))) { fn = "admin_clear_answers"; args.p_role = m[1]; }
+  else if ((m = path.match(/^\/api\/admin\/pass\/([^/]+)$/))) { fn = "admin_revoke"; args.p_code = decodeURIComponent(m[1]); }
   else if (path === "/api/admin/verify") { fn = "admin_verify"; args.p_code = body.code; }
   else if (path === "/api/admin/saved" && method === "GET") fn = "admin_saved_list";
   else if (path === "/api/admin/saved") { fn = "admin_save_current"; args.p_name = body.name; }
@@ -391,7 +392,7 @@ function resultsView() {
     return `<div class="card"><div class="q-num">Question ${i+1}</div><div class="q-text" style="margin-bottom:8px">${esc(q.text)}</div>${body}</div>`;
   }).join("");
   const when = a => new Date(a.at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
-  const rows = [...state.answers].reverse().map(a => `<tr><td>${when(a)}</td><td>${esc(a.company || "")}</td><td>${esc(a.last || a.name || "")}</td><td>${esc(a.first || "")}</td><td>${esc(a.phone || "")}</td><td>${esc(a.email)}</td><td>${esc(a.role || "")}</td><td class="mono">${esc(a.code || "")}</td><td class="num">${a.tries || 1}</td><td>${dateOnly(a.expires)}</td><td><span class="pill ${a.expired ? "exp" : "val"}">${a.expired ? "Périmé" : "Valide"}</span></td><td>${a.code ? `<button class="btn sm ghost" data-pdf="${esc(a.code)}">PDF</button>` : ""}</td></tr>`).join("");
+  const rows = [...state.answers].reverse().map(a => `<tr><td>${when(a)}</td><td>${esc(a.company || "")}</td><td>${esc(a.last || a.name || "")}</td><td>${esc(a.first || "")}</td><td>${esc(a.phone || "")}</td><td>${esc(a.email)}</td><td>${esc(a.role || "")}</td><td class="mono">${esc(a.code || "")}</td><td class="num">${a.tries || 1}</td><td>${dateOnly(a.expires)}</td><td><span class="pill ${a.expired ? "exp" : "val"}">${a.expired ? "Périmé" : "Valide"}</span></td><td>${a.code ? `<button class="btn sm ghost" data-pdf="${esc(a.code)}">PDF</button> <button class="btn sm ghost danger" data-revoke="${esc(a.code)}">Retirer</button>` : ""}</td></tr>`).join("");
   html += `<div class="card"><div class="head2"><div class="q-text">Participants</div><button class="btn sm ghost" id="csv">Exporter en CSV</button></div>
     <div class="sheet"><table><thead><tr><th>Date</th><th>Entreprise</th><th>Nom</th><th>Prénom</th><th>Téléphone</th><th>E-mail</th><th>Rôle</th><th>Code</th><th>Essais</th><th>Expire le</th><th>Profil</th><th>Pass</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   html += `<div class="row"><span class="meta">${n} réponse${n>1?"s":""}</span><button class="btn sm ghost danger" id="clear">Effacer les réponses</button></div>`;
@@ -415,6 +416,14 @@ function bind() {
       if (!a) throw new Error("Pass introuvable");
       makePassPdf(a);
     } catch (x) { alert(x.message); }
+  });
+  document.querySelectorAll("[data-revoke]").forEach(b => b.onclick = async () => {
+    const code = b.dataset.revoke, a = all.answers.find(x => x.code === code);
+    if (!a || !confirm("Retirer " + (a.first || "") + " " + (a.last || a.name || "") + " (" + code + ") du pass ?\n\nSon code ne sera plus reconnu et il devra repasser le test. Cette action est définitive.")) return;
+    try {
+      await api("DELETE", "/api/admin/pass/" + encodeURIComponent(code));
+      all.answers = all.answers.filter(x => x.code !== code); render();
+    } catch (x) { if (x.auth) { pwd = ""; return login("Mot de passe incorrect"); } alert(x.message); }
   });
   on("#vsave", "click", async () => {
     let url = $("#vurl").value.trim(); const msg = $("#verr");
