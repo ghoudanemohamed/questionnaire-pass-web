@@ -190,7 +190,7 @@ async function persist() {
 }
 
 function shell() {
-  const link = location.origin + "/q";
+  const link = new URL("./", location.href).href;
   root.innerHTML = `<header><h1>Questionnaire</h1>
     <div class="status" id="status"><span class="dot"></span><span id="statusText"></span><button class="btn sm" id="toggle"></button></div></header>
     <div class="share"><span>Lien à partager</span><code id="link">${esc(link)}</code><button class="btn sm" id="copy">Copier</button></div>
