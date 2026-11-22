@@ -302,3 +302,15 @@ end $$;
 
 -- Les fonctions internes (préfixe _) ne sont pas appelables depuis le site.
 revoke execute on function _admin_ok(text), _find_answer(text), _answer_view(jsonb), _saved_list(), _snapshot_into(text, text) from public, anon, authenticated;
+
+-- Droits explicites : seules ces fonctions sont appelables depuis le site (clé anon), quels que soient
+-- les réglages "Data API" du projet. Les tables, elles, ne sont pas accessibles directement.
+grant usage on schema public to anon;
+grant execute on function
+  public_state(), public_group(text),
+  submit_answers(text, text, text, text, text, text, jsonb, int),
+  pass_status(text),
+  admin_state(text), admin_save_group(text, text, jsonb, boolean, text), admin_verify(text, text),
+  admin_clear_answers(text, text), admin_saved_list(text), admin_save_current(text, text),
+  admin_open_saved(text, text), admin_delete_saved(text, text)
+to anon;
