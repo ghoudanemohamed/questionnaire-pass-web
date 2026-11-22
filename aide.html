@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a0d3d">
+<title>Aide administrateur</title>
+<style>
+:root{color-scheme:dark;--text:#f6f2ff;--text2:#c9bdea;--muted:#9a8cc4}
+*{box-sizing:border-box}
+html{background:#1a0d3d;min-height:100%}
+body{margin:0;color:var(--text);font:400 16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;background:radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.5),transparent 70%),radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.4),transparent 70%)}
+main{width:min(720px,100%);margin:0 auto}
+h1{font-size:26px;font-weight:500;margin:0 0 4px}
+h2{font-size:19px;font-weight:500;margin:0 0 8px}
+.sub{color:var(--text2);margin:0 0 20px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+nav a{padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.18);color:var(--text2);text-decoration:none;font-size:14px}
+section{padding:20px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);margin-bottom:12px}
+p,li{color:var(--text2);margin:6px 0}
+ol,ul{padding-left:22px;margin:6px 0}
+b{color:var(--text);font-weight:500}
+a{color:#c4b5fd}
+code{font:500 14px ui-monospace,Consolas,monospace;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:6px}
+.tip{border-left:3px solid #7c3aed;padding-left:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <p><a href="admin.html">← Retour à l'administration</a></p>
+  <h1>Guide de l'administration</h1>
+  <p class="sub">De la création du questionnaire au contrôle à l'accueil.</p>
+  <nav aria-label="Sommaire"><a href="#q">Questions</a><a href="#v">Vidéo</a><a href="#o">Ouvrir</a><a href="#p">Participants</a><a href="#s">Stats</a><a href="#l">Enregistrer</a><a href="#c">Contrôle</a><a href="#a">Admins</a><a href="#r">RGPD</a></nav>
+
+  <section id="q"><h2>1. Créer les questions</h2>
+    <ol>
+      <li>Choisis la page en haut : <b>Visiteurs</b> ou <b>Intervenants</b>. Chaque rôle a son propre questionnaire.</li>
+      <li>Onglet <b>Questions</b> › <b>Nouvelle question</b>.</li>
+      <li>Type : choix unique, choix multiple ou texte libre. Coche la ou les bonnes réponses.</li>
+      <li><b>Sans bonne réponse cochée</b>, la question est une question d'opinion : toute réponse est acceptée.</li>
+    </ol>
+    <p class="tip">Une personne qui se trompe doit répondre de nouveau à la question ratée, jusqu'à avoir tout juste.</p></section>
+
+  <section id="v"><h2>2. Ajouter une vidéo</h2>
+    <p>Colle un lien (YouTube ou fichier vidéo) dans le champ de l'onglet Questions, puis clique sur le bouton d'enregistrement. Les participants doivent regarder la vidéo en entier, sans avancer, avant les questions.</p></section>
+
+  <section id="o"><h2>3. Ouvrir au public</h2>
+    <ol>
+      <li>Bouton <b>Ouvrir</b> en haut : le questionnaire de ce rôle devient accessible.</li>
+      <li>Copie le <b>lien à partager</b> avec le bouton Copier, puis envoie-le (mail, SMS, QR code…).</li>
+      <li><b>Fermer</b> coupe l'accès à tout moment.</li>
+    </ol></section>
+
+  <section id="p"><h2>4. Suivre les participants</h2>
+    <ul>
+      <li>Onglet <b>Réponses</b> : résultats par question et tableau des participants.</li>
+      <li>Recherche par nom, entreprise, e-mail ou code. Filtre par profil : valides, <b>expirent dans 30 jours</b>, périmés.</li>
+      <li><b>Exporter en CSV</b> télécharge la liste affichée.</li>
+      <li><b>Retirer</b> supprime un participant : son pass devient inconnu et il doit repasser le test.</li>
+      <li><b>Vérification</b> : tape un code pour voir qui c'est et si son pass est valable.</li>
+    </ul>
+    <p class="tip">Un pass est valable 6 mois, puis il est « périmé ». Les données sont supprimées automatiquement 12 mois après le test.</p></section>
+
+  <section id="s"><h2>5. Statistiques</h2>
+    <p>Onglet <b>Statistiques</b> : nombre de participants, participants par mois et taux de réussite par question. Une question très souvent ratée est probablement mal formulée ou à expliquer dans la vidéo.</p></section>
+
+  <section id="l"><h2>6. Enregistrer et rouvrir un questionnaire</h2>
+    <ul>
+      <li><b>Enregistrer ce questionnaire</b> : garde questions, vidéo et réponses sous un nom.</li>
+      <li><b>Ouvrir un questionnaire enregistré</b> : remplace le questionnaire en cours (une sauvegarde automatique est faite avant) et le ferme au public jusqu'à ce que tu cliques sur Ouvrir.</li>
+      <li><b>Effacer les réponses</b> : vide les participants du rôle affiché.</li>
+    </ul></section>
+
+  <section id="c"><h2>7. Contrôle à l'accueil</h2>
+    <p>Bouton <b>Scanner à l'accueil</b> : la caméra lit le QR code du pass et affiche en grand <b>Valide</b>, <b>Périmé</b> ou <b>Inconnu</b>. Sans caméra, on peut taper le code. Cette page peut être ouverte sur le téléphone de l'agent, sans mot de passe : <code>scanner.html</code>.</p>
+    <p>Le participant retrouve son pass sur <code>mon-pass.html</code> avec son code.</p></section>
+
+  <section id="a"><h2>8. Plusieurs administrateurs</h2>
+    <p>Avec le <b>mot de passe principal</b>, un onglet <b>Administrateurs</b> apparaît. Ajoute un nom et un mot de passe (8 caractères minimum, ou bouton Générer), puis transmets-le à la personne. Elle accède à tout sauf à cette liste. <b>Retirer</b> coupe son accès immédiatement.</p>
+    <p class="tip">Après 10 mots de passe erronés en 10 minutes, la connexion est bloquée pendant un moment pour tout le monde.</p></section>
+
+  <section id="r"><h2>9. Données personnelles</h2>
+    <p>Les participants cochent une case de consentement avant de commencer. La page <code>confidentialite.html</code> explique l'usage des données et leur permet de se supprimer eux-mêmes avec leur code et leur e-mail.</p></section>
+</main>
+</body>
+</html>

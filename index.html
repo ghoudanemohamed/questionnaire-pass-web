@@ -104,6 +104,7 @@ const infoCard = () => `<div class="card stack">
     <label class="opt"><input type="radio" name="role" value="visiteur" required${open_.visiteur ? "" : " disabled"}><span>Visiteur${open_.visiteur ? "" : " · fermé"}</span></label>
     <label class="opt"><input type="radio" name="role" value="intervenant"${open_.intervenant ? "" : " disabled"}><span>Intervenant${open_.intervenant ? "" : " · fermé"}</span></label>
   </fieldset>
+  <label class="opt"><input type="checkbox" name="consent" value="1" required><span style="font-size:14px">J'accepte que mes données servent à délivrer mon pass, conservées 12 mois. <a href="confidentialite.html" target="_blank" rel="noopener">En savoir plus et me supprimer</a></span></label>
 </div>`;
 const getWho = fd => { const g = k => String(fd.get(k) || "").trim();
   return { company: g("company"), last: g("last"), first: g("first"), phone: g("phone"), email: g("email"), role: g("role") }; };
@@ -131,7 +132,7 @@ function intro() {
     e.preventDefault();
     const fd = new FormData(e.target);
     const w = getWho(fd), err = document.getElementById("ierr"), go = document.getElementById("go");
-    const msg = infoError(w);
+    const msg = infoError(w) || (fd.get("consent") ? "" : "Coche la case pour accepter l'utilisation de tes données");
     if (msg) { err.textContent = msg; return; }
     go.disabled = true; err.textContent = "";
     try {

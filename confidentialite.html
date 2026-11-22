@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a0d3d">
+<title>Données personnelles</title>
+<style>
+:root{color-scheme:dark;--text:#f6f2ff;--text2:#c9bdea;--muted:#9a8cc4;--ok:#86efac;--ko:#ff9a8f}
+*{box-sizing:border-box}
+html{background:#1a0d3d;min-height:100%}
+body{margin:0;color:var(--text);font:400 16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;background:radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.5),transparent 70%),radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.4),transparent 70%)}
+main{width:min(640px,100%);margin:0 auto}
+h1{font-size:24px;font-weight:500;margin:0 0 16px}
+h2{font-size:18px;font-weight:500;margin:28px 0 8px}
+p,li{color:var(--text2)}
+ul{padding-left:20px}
+a{color:#c4b5fd}
+.card{padding:20px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);margin-top:12px}
+label{display:block;font-size:14px;color:var(--text2);margin:12px 0 6px}
+input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(10,4,30,.55);color:var(--text);font:500 16px system-ui,sans-serif}
+.btn{margin-top:16px;padding:12px 18px;border:0;border-radius:10px;background:#7c3aed;color:#fff;font:500 16px system-ui,sans-serif;cursor:pointer}
+input:focus-visible,.btn:focus-visible{outline:2px solid #c4b5fd;outline-offset:2px}
+#res{min-height:22px;margin-top:12px;font-size:15px}
+.ok{color:var(--ok)}.ko{color:var(--ko)}
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">← Retour au questionnaire</a></p>
+  <h1>Tes données personnelles</h1>
+  <h2>Ce qui est collecté</h2>
+  <p>Entreprise, nom, prénom, téléphone, adresse e-mail, rôle (visiteur ou intervenant), tes réponses au questionnaire et la date du test.</p>
+  <h2>Pourquoi</h2>
+  <p>Uniquement pour délivrer ton pass et permettre à l'organisateur de vérifier, à l'accueil, que tu as bien réussi le test. Elles ne sont ni vendues ni utilisées à d'autres fins.</p>
+  <h2>Qui y a accès</h2>
+  <ul>
+    <li>Les administrateurs du questionnaire désignés par l'organisateur.</li>
+    <li>L'hébergeur technique (Supabase, base de données) et GitHub (site et sauvegardes), qui n'utilisent pas ces données pour eux-mêmes.</li>
+    <li>Le QR code de ton pass n'affiche que ton prénom, l'initiale de ton nom, ton rôle et la validité du pass.</li>
+  </ul>
+  <h2>Combien de temps</h2>
+  <p>Ton pass est valable 6 mois. Tes données sont ensuite supprimées automatiquement 12 mois après la date du test.</p>
+  <h2>Tes droits</h2>
+  <p>Tu peux demander l'accès à tes données, leur correction ou leur suppression auprès de l'organisateur qui t'a transmis le lien. La suppression est aussi possible tout de suite, par toi-même, ci-dessous : ton pass sera retiré et tu devras repasser le test pour en obtenir un nouveau.</p>
+  <form class="card" id="f">
+    <strong>Supprimer mes données</strong>
+    <label for="c">Code de ton pass</label><input id="c" autocomplete="off" autocapitalize="characters" maxlength="12" required placeholder="V26110001">
+    <label for="e">E-mail utilisé pour le test</label><input id="e" type="email" autocomplete="email" maxlength="200" required>
+    <div id="res" role="status" aria-live="polite"></div>
+    <button class="btn" type="submit">Supprimer définitivement</button>
+  </form>
+</main>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+document.getElementById("f").onsubmit = async e => {
+  e.preventDefault();
+  const res = document.getElementById("res"), code = document.getElementById("c").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const email = document.getElementById("e").value;
+  res.className = ""; res.textContent = "Suppression";
+  try {
+    const d = await rpc("delete_my_data", { p_code: code, p_email: email });
+    if (d.ok) { res.className = "ok"; res.textContent = "Tes données ont été supprimées."; e.target.reset(); }
+    else { res.className = "ko"; res.textContent = "Aucun pass ne correspond à ce code et à cet e-mail."; }
+  } catch (_) { res.className = "ko"; res.textContent = "Connexion impossible, réessaie."; }
+};
+</script>
+</body>
+</html>

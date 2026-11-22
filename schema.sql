@@ -62,17 +62,47 @@ create or replace function _norm(t text) returns text language sql immutable as 
   select regexp_replace(lower(btrim(coalesce(t, ''))), '\s+', ' ', 'g')
 $$;
 
--- Mot de passe admin : vrai si correct. Après 10 échecs en 10 minutes, tout est refusé.
-create or replace function _admin_ok(p_pwd text) returns boolean
+-- Administrateurs supplémentaires (en plus du mot de passe principal, stocké dans settings).
+create table if not exists admins (
+  name text primary key,
+  hash text not null,
+  at timestamptz not null default now()
+);
+alter table admins enable row level security;
+revoke all on admins from anon, authenticated;
+
+-- Niveau du mot de passe : 'main' (principal), 'sub' (administrateur ajouté) ou null (refusé).
+-- Après 10 échecs en 10 minutes, tout est refusé.
+create or replace function _admin_level(p_pwd text) returns text
 language plpgsql security definer set search_path = public, extensions as $$
-declare h text;
+declare h text; r record;
 begin
-  if (select count(*) from auth_fail where at > now() - interval '10 minutes') >= 10 then return false; end if;
+  if (select count(*) from auth_fail where at > now() - interval '10 minutes') >= 10 then return null; end if;
   select value into h from settings where key = 'admin_hash';
-  if h is not null and crypt(coalesce(p_pwd, ''), h) = h then return true; end if;
+  if h is not null and crypt(coalesce(p_pwd, ''), h) = h then return 'main'; end if;
+  for r in select hash from admins loop
+    if crypt(coalesce(p_pwd, ''), r.hash) = r.hash then return 'sub'; end if;
+  end loop;
   insert into auth_fail default values;
   delete from auth_fail where at < now() - interval '1 day';
-  return false;
+  return null;
+end $$;
+
+create or replace function _admin_ok(p_pwd text) returns boolean
+language sql security definer set search_path = public, extensions as $$
+  select _admin_level(p_pwd) is not null
+$$;
+
+-- Conservation des données : 12 mois après le test (6 mois de validité du pass + 6 mois).
+create or replace function _purge() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from answers where at < now() - interval '12 months';
+  update saved set answers = coalesce(
+    (select jsonb_agg(a) from jsonb_array_elements(answers) a
+      where (a->>'at')::timestamptz >= now() - interval '12 months'), '[]'::jsonb)
+  where exists (select 1 from jsonb_array_elements(answers) a
+      where (a->>'at')::timestamptz < now() - interval '12 months');
 end $$;
 
 create or replace function _find_answer(p_code text) returns jsonb
@@ -170,6 +200,7 @@ begin
 
   if jsonb_array_length(wrong) > 0 then return jsonb_build_object('ok', false, 'wrong', wrong); end if;
 
+  perform _purge();
   v_ym := to_char(now() at time zone 'Europe/Paris', 'YYMM');
   insert into counters (ym, n) values (v_ym, 1) on conflict (ym) do update set n = counters.n + 1 returning counters.n into v_n;
   if v_n > 9999 then raise exception 'Limite de 9999 participants atteinte pour ce mois'; end if;
@@ -199,9 +230,12 @@ end $$;
 -- ============ Fonctions admin (mot de passe demandé à chaque appel) ============
 create or replace function admin_state(p_pwd text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd);
 begin
-  if not _admin_ok(p_pwd) then return jsonb_build_object('error', 'auth'); end if;
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  perform _purge();
   return jsonb_build_object(
+    'main', lvl = 'main',
     'groups', (select jsonb_object_agg(role, jsonb_build_object('questions', questions, 'active', active, 'video', video)) from groups),
     'answers', coalesce((select jsonb_agg(_answer_view(to_jsonb(a) - 'id') order by a.at, a.id) from answers a), '[]'::jsonb),
     'name', coalesce((select value from settings where key = 'name'), ''),
@@ -336,8 +370,70 @@ begin
   return _saved_list();
 end $$;
 
+-- ---- Administrateurs (réservé au mot de passe principal) ----
+create or replace function _admins_list() returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('name', name, 'at', at) order by at), '[]'::jsonb) from admins
+$$;
+
+create or replace function admin_list_admins(p_pwd text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd);
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  return _admins_list();
+end $$;
+
+create or replace function admin_add_admin(p_pwd text, p_name text, p_new text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd); nm text := btrim(coalesce(p_name, '')); h text; r record;
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  if nm = '' or length(nm) > 40 then return jsonb_build_object('error', 'Nom de 1 à 40 caractères'); end if;
+  if length(coalesce(p_new, '')) < 8 or length(p_new) > 200 then
+    return jsonb_build_object('error', 'Mot de passe : 8 caractères minimum');
+  end if;
+  if exists (select 1 from admins where lower(name) = lower(nm)) then
+    return jsonb_build_object('error', 'Ce nom existe déjà');
+  end if;
+  select value into h from settings where key = 'admin_hash';
+  if h is not null and crypt(p_new, h) = h then return jsonb_build_object('error', 'Choisis un autre mot de passe'); end if;
+  for r in select hash from admins loop
+    if crypt(p_new, r.hash) = r.hash then return jsonb_build_object('error', 'Choisis un autre mot de passe'); end if;
+  end loop;
+  insert into admins (name, hash) values (nm, crypt(p_new, gen_salt('bf')));
+  return _admins_list();
+end $$;
+
+create or replace function admin_remove_admin(p_pwd text, p_name text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd);
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  delete from admins where name = p_name;
+  return _admins_list();
+end $$;
+
+-- ---- RGPD : la personne supprime elle-même ses données (code + e-mail du pass) ----
+create or replace function delete_my_data(p_code text, p_email text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare c text := upper(regexp_replace(coalesce(p_code, ''), '[\s-]', '', 'g')); a jsonb;
+begin
+  a := _find_answer(c);
+  if a is null or lower(btrim(coalesce(a->>'email', ''))) <> lower(btrim(coalesce(p_email, ''))) then
+    return jsonb_build_object('ok', false);
+  end if;
+  delete from answers where upper(code) = c;
+  update saved set answers = coalesce(
+    (select jsonb_agg(x) from jsonb_array_elements(answers) x where upper(x->>'code') <> c), '[]'::jsonb)
+  where exists (select 1 from jsonb_array_elements(answers) x where upper(x->>'code') = c);
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- Les fonctions internes (préfixe _) ne sont pas appelables depuis le site.
-revoke execute on function _admin_ok(text), _find_answer(text), _answer_view(jsonb), _saved_list(), _snapshot_into(text, text) from public, anon, authenticated;
+revoke execute on function _admin_level(text), _admin_ok(text), _purge(), _admins_list(), _find_answer(text), _answer_view(jsonb), _saved_list(), _snapshot_into(text, text) from public, anon, authenticated;
 
 -- Droits explicites : seules ces fonctions sont appelables depuis le site (clé anon), quels que soient
 -- les réglages "Data API" du projet. Les tables, elles, ne sont pas accessibles directement.
@@ -348,5 +444,7 @@ grant execute on function
   pass_status(text),
   admin_state(text), admin_save_group(text, text, jsonb, boolean, text), admin_verify(text, text),
   admin_clear_answers(text, text), admin_revoke(text, text), admin_saved_list(text), admin_save_current(text, text),
-  admin_open_saved(text, text), admin_delete_saved(text, text)
+  admin_open_saved(text, text), admin_delete_saved(text, text),
+  admin_list_admins(text), admin_add_admin(text, text, text), admin_remove_admin(text, text),
+  delete_my_data(text, text)
 to anon;
