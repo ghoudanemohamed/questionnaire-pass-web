@@ -149,7 +149,7 @@ function playVideo() {
     <div class="card player">${id ? `<div id="yt"></div>` : `<video id="v" controls playsinline preload="auto"></video>`}</div>
     <div class="err" id="verr" role="alert"></div>`;
   const fail = () => {
-    document.getElementById("verr").innerHTML = `La vidéo ne peut pas être lue. <button class="btn" id="skip" style="margin-left:8px">Passer au questionnaire</button>`;
+    document.getElementById("verr").innerHTML = `La vidéo ne peut pas être lue ici. <a href="${esc(video)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">L'ouvrir dans YouTube</a> <button class="btn" id="skip" style="margin-left:8px">Passer au questionnaire</button>`;
     document.getElementById("skip").onclick = () => form();
   };
   if (id) {
