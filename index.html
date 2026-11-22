@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Questionnaire</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:rgba(12,5,32,.45); --surface:rgba(255,255,255,.06); --raised:rgba(255,255,255,.1); --line:rgba(255,255,255,.13);
+  --text:#f6f2ff; --text2:#c9bdea; --muted:#9a8cc4;
+  --accent:#c4b5fd; --btn:#7c3aed; --accent-ink:#fff; --danger:#ff9a8f;
+  --r:12px; --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:32px 16px 96px}
+h1{font-size:24px;font-weight:500;margin:0 0 4px}
+.sub{color:var(--text2);margin:0 0 24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin:0 0 12px;min-width:0}
+fieldset.card{margin:0 0 12px}
+label.f{display:block;font-size:14px;color:var(--text2);margin-bottom:8px}
+input[type=text],input[type=email],input[type=tel],textarea{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;height:40px}
+textarea{height:auto;min-height:88px;resize:vertical}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stack>*+*{margin-top:16px}
+.q-num{color:var(--muted);font-variant-numeric:tabular-nums;font-size:14px;padding:0 4px}
+.q-text{font-weight:500;margin:0 0 12px}
+.opt{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;transition:background-color .15s var(--ease)}
+.opt:hover{background:var(--bg)}
+.opt input{accent-color:var(--accent);margin:0}
+.opts>*+*{margin-top:8px}
+.btn{font:inherit;font-weight:500;border-radius:8px;height:40px;padding:0 20px;cursor:pointer;border:0;background:var(--btn);color:var(--accent-ink);transition:opacity .15s var(--ease),transform .1s var(--ease)}
+.btn:hover{opacity:.9}.btn:active{transform:scale(.98)}.btn:disabled{opacity:.5;cursor:default}
+.empty{text-align:center;color:var(--text2);padding:64px 16px}
+.empty strong{display:block;color:var(--text);font-weight:500;font-size:20px;margin-bottom:8px}
+.err{color:var(--danger);font-size:14px;min-height:21px}
+.hidden{display:none}
+.code{font:500 32px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.2em;margin:24px 0 8px;color:var(--text);user-select:all}
+.meta{color:var(--muted);font-size:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.roles{border:0;padding:0;margin:0;min-width:0}.roles legend{padding:0}
+.roles .opt+.opt{margin-top:8px}
+@media(max-width:480px){.two{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.player{padding:0;overflow:hidden;aspect-ratio:16/9}
+.player video,.player iframe,.player #yt{width:100%;height:100%;display:block;border:0;background:#000}
+
+/* Fond violet et effets */
+html{background:#1a0d3d;min-height:100%}
+body{background:transparent}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.6),transparent 70%),
+    radial-gradient(45% 40% at 92% 18%,rgba(217,70,239,.32),transparent 70%),
+    radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.45),transparent 70%);
+  animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(2%,3%,0) scale(1.12)}}
+.card{backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(8,2,28,.35),inset 0 1px 0 rgba(255,255,255,.07)}
+.opt:hover{background:var(--raised)}
+.btn{box-shadow:0 4px 20px rgba(124,58,237,.5)}
+@media(prefers-reduced-motion:reduce){body::before{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="empty">Chargement</div></div>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="pdf.js"></script>
+<script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const app = document.getElementById("app");
+let questions = [], video = "", open_ = {};
+
+async function init() {
+  try {
+    open_ = (await rpc("public_state")).active;
+    if (!open_.visiteur && !open_.intervenant) return closed();
+    intro();
+  } catch (e) {
+    app.innerHTML = `<div class="empty"><strong>Connexion impossible</strong>Réessaie dans un instant.</div>`;
+  }
+}
+function closed() {
+  app.innerHTML = `<div class="empty"><strong>Le questionnaire n'est pas ouvert</strong>Reviens plus tard.</div>`;
+}
+let kept = {}, who = null, tries = 0;
+
+/* Étape 1 : informations, puis la vidéo se lance */
+const infoCard = () => `<div class="card stack">
+  <div><label class="f" for="company">Entreprise</label><input type="text" id="company" name="company" autocomplete="organization" required maxlength="100"></div>
+  <div class="two">
+    <div><label class="f" for="last">Nom</label><input type="text" id="last" name="last" autocomplete="family-name" required maxlength="100"></div>
+    <div><label class="f" for="first">Prénom</label><input type="text" id="first" name="first" autocomplete="given-name" required maxlength="100"></div>
+  </div>
+  <div class="two">
+    <div><label class="f" for="phone">Téléphone</label><input type="tel" id="phone" name="phone" autocomplete="tel" required maxlength="30" pattern="[0-9+()./ \-]{6,30}"></div>
+    <div><label class="f" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" required maxlength="200"></div>
+  </div>
+  <fieldset class="roles"><legend class="f">Vous êtes</legend>
+    <label class="opt"><input type="radio" name="role" value="visiteur" required${open_.visiteur ? "" : " disabled"}><span>Visiteur${open_.visiteur ? "" : " · fermé"}</span></label>
+    <label class="opt"><input type="radio" name="role" value="intervenant"${open_.intervenant ? "" : " disabled"}><span>Intervenant${open_.intervenant ? "" : " · fermé"}</span></label>
+  </fieldset>
+</div>`;
+const getWho = fd => { const g = k => String(fd.get(k) || "").trim();
+  return { company: g("company"), last: g("last"), first: g("first"), phone: g("phone"), email: g("email"), role: g("role") }; };
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/, PHONE_RE = /^(?:0|\+33|0033)[1-9]\d{8}$/;
+function infoError(w) {
+  if (!w.company || !w.last || !w.first) return "Remplis l'entreprise, le nom et le prénom";
+  if (!EMAIL_RE.test(w.email)) return "L'e-mail doit contenir un @ et un domaine, par exemple nom@societe.fr";
+  if (!PHONE_RE.test(w.phone.replace(/[ .\-()\/]/g, ""))) return "Le téléphone doit avoir 10 chiffres, par exemple 06 12 34 56 78";
+  if (!w.role) return "Choisis visiteur ou intervenant";
+  return "";
+}
+function intro() {
+  app.innerHTML = `<h1>Questionnaire</h1><p class="sub">Renseigne tes informations : le questionnaire de ton rôle s'affiche ensuite, après la vidéo s'il y en a une.</p>
+  <form id="i" class="stack" novalidate>${infoCard()}<div class="err" id="ierr" role="alert"></div><button class="btn" type="submit" id="go">Continuer</button></form>`;
+  document.getElementById("i").onsubmit = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const w = getWho(fd), err = document.getElementById("ierr"), go = document.getElementById("go");
+    const msg = infoError(w);
+    if (msg) { err.textContent = msg; return; }
+    go.disabled = true; err.textContent = "";
+    try {
+      const g = await rpc("public_group", { p_role: w.role });
+      if (!g.active) { err.textContent = "Le questionnaire " + (w.role === "intervenant" ? "des intervenants" : "des visiteurs") + " n'est pas ouvert"; go.disabled = false; return; }
+      questions = g.questions;
+      video = /^(https?:\/\/|\/videos\/)/i.test(g.video || "") ? g.video : "";
+      who = w; kept = {}; tries = 0;
+      video ? playVideo() : form();
+    } catch (x) { err.textContent = "Connexion impossible, réessaie"; go.disabled = false; }
+  };
+}
+const ytId = u => { const m = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/); return m && m[1]; };
+function loadYT(ok, fail) {
+  if (window.YT && YT.Player) return ok();
+  window.onYouTubeIframeAPIReady = ok;
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api"; s.onerror = fail;
+  document.head.appendChild(s);
+}
+function playVideo() {
+  const id = ytId(video);
+  app.innerHTML = `<h1>Vidéo</h1><p class="sub">Regarde la vidéo jusqu'à la fin : le questionnaire s'affichera ensuite.</p>
+    <div class="card player">${id ? `<div id="yt"></div>` : `<video id="v" controls playsinline preload="auto"></video>`}</div>
+    <div class="err" id="verr" role="alert"></div>`;
+  const fail = () => {
+    document.getElementById("verr").innerHTML = `La vidéo ne peut pas être lue. <button class="btn" id="skip" style="margin-left:8px">Passer au questionnaire</button>`;
+    document.getElementById("skip").onclick = () => form();
+  };
+  if (id) {
+    loadYT(() => new YT.Player("yt", { videoId: id, width: "100%", height: "100%",
+      playerVars: { rel: 0, playsinline: 1, autoplay: 1 },
+      events: { onStateChange: e => { if (e.data === 0) form(); }, onError: fail } }), fail);
+  } else {
+    const v = document.getElementById("v");
+    v.src = video; v.onended = () => form(); v.onerror = fail;
+    v.play().catch(() => {});
+  }
+}
+
+function form(wrongIds) {
+  const retry = !!wrongIds;
+  if (!who) return intro();
+  const shown =retry ? questions.filter(q => wrongIds.includes(q.id)) : questions;
+  app.innerHTML = `<h1>Questionnaire</h1>${retry
+    ? `<p class="sub" role="status">Pas tout à fait : ${shown.length>1?shown.length+" réponses sont fausses":"une réponse est fausse"}. Réessaie ${shown.length>1?"ces questions":"cette question"}.</p>`
+    : `<p class="sub">Réponds aux ${questions.length} question${questions.length>1?"s":""}.</p>`}
+  <form id="f" class="stack">
+    ${shown.map((q)=>{const i=questions.indexOf(q);return `<fieldset class="card"><legend class="q-num">Question ${i+1} sur ${questions.length}</legend>
+      <p class="q-text">${esc(q.text)}</p>
+      ${q.type==="text" ? `<textarea name="${esc(q.id)}" required maxlength="2000" aria-label="${esc(q.text)}"></textarea>` :
+      `<div class="opts">${q.options.map((o,j)=>`<label class="opt"><input type="${q.type==="multi"?"checkbox":"radio"}" name="${esc(q.id)}" value="${j}" ${q.type==="choice"&&j===0?"required":""}><span>${esc(o)}</span></label>`).join("")}</div>`}
+    </fieldset>`}).join("")}
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" type="submit" id="send">Envoyer</button>
+  </form>`;
+  document.getElementById("f").onsubmit = send;
+}
+async function send(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target), responses = { ...kept };
+  questions.forEach(q => {
+    if (!e.target.querySelector(`[name="${q.id}"]`)) return; // question non affichée : on garde la réponse précédente
+    if (q.type === "text") responses[q.id] = fd.get(q.id) || "";
+    else if (q.type === "multi") responses[q.id] = fd.getAll(q.id).map(Number);
+    else responses[q.id] = Number(fd.get(q.id));
+  });
+  tries++;
+  const btn = document.getElementById("send"), err = document.getElementById("err");
+  btn.disabled = true; err.textContent = "";
+  try {
+    const d = await rpc("submit_answers", {
+      p_role: who.role, p_company: who.company, p_last: who.last, p_first: who.first,
+      p_phone: who.phone, p_email: who.email, p_responses: responses, p_tries: tries
+    });
+    if (d.error === "closed") return closed();
+    if (d.error) { tries--; throw new Error(d.error); }
+    if (!d.ok) {
+      kept = {}; questions.forEach(q => { if (!d.wrong.includes(q.id) && q.id in responses) kept[q.id] = responses[q.id]; });
+      form(d.wrong); window.scrollTo(0, 0); return;
+    }
+    app.innerHTML = `<div class="empty"><strong>Bravo, ${esc(who.first)}</strong>Toutes tes réponses sont justes${tries>1?" après "+tries+" essais":""}.
+      <div class="code" aria-label="Ton code">${esc(d.code)}</div><span class="meta">Ton code personnel, valable 6 mois : garde-le</span>
+      <div style="margin-top:24px"><button class="btn" id="pdf" type="button">Télécharger mon pass en PDF</button></div><div class="err" id="pdferr" role="alert"></div></div>`;
+    document.getElementById("pdf").onclick = () => {
+      try { makePassPdf(d); } catch (x) { document.getElementById("pdferr").textContent = x.message; }
+    };
+  } catch (x) { tries--; err.textContent = x.message; btn.disabled = false; }
+}
+init();
+</script>
+</body>
+</html>

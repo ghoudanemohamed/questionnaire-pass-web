@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Questionnaire · Admin</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:rgba(12,5,32,.45); --surface:rgba(255,255,255,.06); --raised:rgba(255,255,255,.1); --line:rgba(255,255,255,.13);
+  --text:#f6f2ff; --text2:#c9bdea; --muted:#9a8cc4;
+  --accent:#c4b5fd; --btn:#7c3aed; --accent-ink:#fff; --danger:#ff9a8f;
+  --r:12px; --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:32px 16px 96px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+h1{font-size:20px;font-weight:500;margin:0}
+.status{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.on .dot{background:var(--accent)}
+.share{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 12px 16px;margin-bottom:24px;font-size:14px}
+.share code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px}
+nav button{background:none;border:0;padding:12px 16px;font:inherit;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s var(--ease),border-color .15s var(--ease)}
+nav button:hover{color:var(--text)}
+nav button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent)}
+.count{color:var(--muted);font-variant-numeric:tabular-nums;margin-left:4px}
+nav.roles{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin:0 0 16px}
+nav.roles button{display:flex;align-items:center;gap:8px;margin:0;padding:8px 20px;border:0;border-radius:8px;font-weight:500}
+nav.roles button[aria-current=true]{background:var(--btn);color:#fff;box-shadow:0 4px 16px rgba(124,58,237,.45)}
+nav.roles .count{color:inherit;opacity:.7;margin:0}
+nav.roles .dot.live{background:#86efac;box-shadow:0 0 8px rgba(134,239,172,.8)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:12px}
+label.f{display:block;font-size:14px;color:var(--text2);margin-bottom:8px}
+input[type=text],input[type=password],textarea,select{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;height:40px}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:12px;align-items:center}
+.stack>*+*{margin-top:16px}
+.btn{font:inherit;font-weight:500;border-radius:8px;height:40px;padding:0 16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--text);transition:background-color .15s var(--ease),transform .1s var(--ease)}
+.btn:hover{background:var(--bg)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--btn);color:var(--accent-ink);border-color:transparent}
+.btn.primary:hover{background:var(--btn);opacity:.88}
+.btn.sm{height:32px;padding:0 12px;font-size:14px}
+.btn.ghost{border-color:transparent;background:none;color:var(--text2)}
+.btn.danger{color:var(--danger)}
+.q-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.q-num{color:var(--muted);font-variant-numeric:tabular-nums;font-size:14px}
+.q-text{font-weight:500;margin:4px 0}
+.meta{color:var(--muted);font-size:14px}
+.opts>*+*{margin-top:8px}
+.empty{text-align:center;color:var(--text2);padding:48px 16px}
+.empty strong{display:block;color:var(--text);font-weight:500;font-size:18px;margin-bottom:8px}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.res{display:grid;grid-template-columns:1fr auto;gap:0 16px;font-size:14px}
+.res .n{color:var(--text2);font-variant-numeric:tabular-nums}
+.res>div:nth-child(3n+1),.res>div:nth-child(3n+2){margin-top:12px}
+.res .bar{grid-column:1/-1}
+.ans{border-top:1px solid var(--line);padding:12px 0;font-size:15px}
+.ans:first-of-type{border-top:0}
+.head2{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.sheet{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:8px}
+.sheet table{border-collapse:collapse;width:100%;font-size:14px;white-space:nowrap}
+.sheet th,.sheet td{padding:8px 12px;text-align:left;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sheet th:last-child,.sheet td:last-child{border-right:0}
+.sheet tbody tr:last-child td{border-bottom:0}
+.sheet th{position:sticky;top:0;background:#2a1760;color:var(--text2);font-weight:500;z-index:1}
+.sheet tbody tr:nth-child(even){background:rgba(255,255,255,.04)}
+.sheet tbody tr:hover{background:rgba(255,255,255,.09)}
+.sheet .mono{font-family:ui-monospace,Consolas,monospace;letter-spacing:.08em}
+.sheet .num{text-align:right;font-variant-numeric:tabular-nums}
+.who{display:grid;grid-template-columns:1fr 1fr auto;gap:4px 16px;font-size:14px;padding:12px 0;border-top:1px solid var(--line)}
+.who:first-of-type{border-top:0}
+.who span:last-child{color:var(--muted);font-variant-numeric:tabular-nums}
+.who span{min-width:0;overflow-wrap:anywhere}
+.err{color:var(--danger);font-size:14px;min-height:21px}
+.login{max-width:360px;margin:96px auto}
+.hidden{display:none}
+@media(max-width:480px){header{flex-direction:column;align-items:flex-start}.who{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 64px);overflow:auto;background:#21124a;color:var(--text);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 24px 64px rgba(6,2,22,.6)}
+dialog::backdrop{background:rgba(10,4,30,.65);backdrop-filter:blur(4px)}
+.verdict{border-radius:8px;padding:12px 16px;font-size:14px;line-height:1.5}
+.verdict strong{display:block;font-size:16px;font-weight:500;margin-bottom:4px}
+.verdict.ok{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.45)}.verdict.ok strong{color:#86efac}
+.verdict.warn{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.45)}.verdict.warn strong{color:#fcd34d}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:13px}
+.pill.val{background:rgba(74,222,128,.15);color:#86efac}.pill.exp{background:rgba(251,191,36,.15);color:#fcd34d}
+.verdict.ko{background:rgba(255,154,143,.12);border:1px solid rgba(255,154,143,.45)}.verdict.ko strong{color:var(--danger)}
+dialog h2{font-size:18px;font-weight:500;margin:0}
+.saved{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.saved:first-child{border-top:0}
+.saved .q-text{margin:0}
+
+/* Fond violet et effets */
+html{background:#1a0d3d;min-height:100%}
+body{background:transparent}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.6),transparent 70%),
+    radial-gradient(45% 40% at 92% 18%,rgba(217,70,239,.32),transparent 70%),
+    radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.45),transparent 70%);
+  animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(2%,3%,0) scale(1.12)}}
+.card,.share{backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(8,2,28,.35),inset 0 1px 0 rgba(255,255,255,.07)}
+.btn:hover,.opt:hover{background:var(--raised)}
+.btn.primary{box-shadow:0 4px 20px rgba(124,58,237,.5)}
+.bar i{box-shadow:0 0 12px rgba(167,139,250,.6)}
+.on .dot{box-shadow:0 0 0 3px rgba(196,181,253,.25),0 0 12px rgba(196,181,253,.7)}
+select option{background:#1a0d3d;color:#f6f2ff}
+@media(prefers-reduced-motion:reduce){body::before{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="pdf.js"></script>
+<script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const $ = s => document.querySelector(s);
+const root = $("#root");
+
+let pwd = "";
+try { pwd = sessionStorage.getItem("qpwd") || ""; } catch (e) {}
+const ROLES = { visiteur: "Visiteurs", intervenant: "Intervenants" };
+const roleOf = a => a.role || "visiteur"; // anciennes réponses sans rôle = visiteur
+let all = { groups: { visiteur: { questions: [], active: false, video: "" }, intervenant: { questions: [], active: false, video: "" } }, answers: [], name: "" };
+let role = "visiteur";
+try { const r = sessionStorage.getItem("qrole"); if (r in ROLES) role = r; } catch (e) {}
+/* `state` = la vue du rôle affiché : questions, ouverture, vidéo et réponses de cette page. */
+const state = {
+  get questions() { return all.groups[role].questions; }, set questions(v) { all.groups[role].questions = v; },
+  get active() { return all.groups[role].active; }, set active(v) { all.groups[role].active = v; },
+  get video() { return all.groups[role].video; }, set video(v) { all.groups[role].video = v; },
+  get answers() { return all.answers.filter(a => roleOf(a) === role); },
+  set answers(v) { all.answers = all.answers.filter(a => roleOf(a) !== role).concat(v); },
+  get name() { return all.name; }, set name(v) { all.name = v; }
+};
+let tab = "build", editing = null;
+
+/* Traduit les anciens appels (méthode + chemin) en appels aux fonctions de la base. */
+async function api(method, path, body) {
+  let fn, args = { p_pwd: pwd }, m;
+  if (path === "/api/admin/state") fn = "admin_state";
+  else if ((m = path.match(/^\/api\/admin\/config\/(\w+)$/))) { fn = "admin_save_group"; Object.assign(args, { p_role: m[1], p_questions: body.questions, p_active: body.active, p_video: body.video || "" }); }
+  else if ((m = path.match(/^\/api\/admin\/answers\/(\w+)$/))) { fn = "admin_clear_answers"; args.p_role = m[1]; }
+  else if (path === "/api/admin/verify") { fn = "admin_verify"; args.p_code = body.code; }
+  else if (path === "/api/admin/saved" && method === "GET") fn = "admin_saved_list";
+  else if (path === "/api/admin/saved") { fn = "admin_save_current"; args.p_name = body.name; }
+  else if ((m = path.match(/^\/api\/admin\/saved\/([^/]+)\/open$/))) { fn = "admin_open_saved"; args.p_sid = decodeURIComponent(m[1]); }
+  else if ((m = path.match(/^\/api\/admin\/saved\/([^/]+)$/))) { fn = "admin_delete_saved"; args.p_sid = decodeURIComponent(m[1]); }
+  else throw new Error("Appel inconnu : " + path);
+  const d = await rpc(fn, args);
+  if (d && d.error === "auth") throw Object.assign(new Error("auth"), { auth: true });
+  if (d && typeof d.error === "string") throw new Error(d.error);
+  return d;
+}
+
+async function boot() {
+  if (!pwd) return login();
+  try { all = await api("GET", "/api/admin/state"); shell(); }
+  catch (e) { if (e.auth) { pwd = ""; return login("Mot de passe incorrect"); } root.innerHTML = `<div class="empty">Serveur injoignable</div>`; }
+}
+function login(msg = "") {
+  root.innerHTML = `<form class="login card stack" id="lf"><h1>Administration</h1>
+    <div><label class="f" for="p">Mot de passe</label><input type="password" id="p" required autofocus></div>
+    <div class="err" role="alert">${esc(msg)}</div><button class="btn primary" type="submit">Entrer</button></form>`;
+  $("#lf").onsubmit = e => {
+    e.preventDefault(); pwd = $("#p").value;
+    try { sessionStorage.setItem("qpwd", pwd); } catch (x) {}
+    boot();
+  };
+}
+
+async function persist() {
+  try { await api("PUT", "/api/admin/config/" + role, { questions: state.questions, active: state.active, video: state.video || "" }); }
+  catch (e) { alert(e.message); await boot(); return false; }
+  return true;
+}
+
+function shell() {
+  const link = location.origin + "/q";
+  root.innerHTML = `<header><h1>Questionnaire</h1>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText"></span><button class="btn sm" id="toggle"></button></div></header>
+    <div class="share"><span>Lien à partager</span><code id="link">${esc(link)}</code><button class="btn sm" id="copy">Copier</button></div>
+    <div class="tools"><div class="row" style="flex-wrap:wrap">
+        <button class="btn" id="bsave">Enregistrer ce questionnaire</button>
+        <button class="btn" id="bopen">Ouvrir un questionnaire enregistré</button>
+        <button class="btn" id="bverify">Vérification</button></div>
+      <div class="meta" id="curname" role="status"></div></div>
+    <dialog id="dsave"><form id="sform" class="stack" method="dialog">
+        <h2>Enregistrer ce questionnaire</h2>
+        <div><label class="f" for="sname">Nom</label><input type="text" id="sname" maxlength="80" required></div>
+        <div class="meta">Les questions, la vidéo et les réponses reçues sont enregistrées.</div>
+        <div class="err" id="serr" role="alert"></div>
+        <div class="row"><button class="btn primary" type="submit">Enregistrer</button><button class="btn ghost" type="button" id="scancel">Annuler</button></div>
+      </form></dialog>
+    <dialog id="dopen"><div class="stack">
+        <h2>Questionnaires enregistrés</h2>
+        <div id="slist"></div>
+        <div class="err" id="oerr" role="alert"></div>
+        <div class="row"><button class="btn ghost" type="button" id="oclose">Fermer</button></div>
+      </div></dialog>
+    <dialog id="dverify"><form id="vform" class="stack" method="dialog">
+        <h2>Vérifier un code</h2>
+        <div><label class="f" for="vcode">Code de la personne</label><input type="text" id="vcode" autocomplete="off" autocapitalize="characters" maxlength="12" required></div>
+        <div id="vres" role="status" aria-live="polite"></div>
+        <div class="row"><button class="btn primary" type="submit">Vérifier</button><button class="btn ghost" type="button" id="vclose">Fermer</button></div>
+      </form></dialog>
+    <nav class="roles" id="roles" aria-label="Page">
+      <button data-role="visiteur"></button><button data-role="intervenant"></button>
+    </nav>
+    <nav role="tablist" id="tabs">
+      <button role="tab" data-tab="build">Questions<span class="count" id="cQ"></span></button>
+      <button role="tab" data-tab="results">Réponses<span class="count" id="cR"></span></button>
+    </nav><main id="view"></main>`;
+  $("#copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(link); $("#copy").textContent = "Copié"; setTimeout(() => { const c = $("#copy"); if (c) c.textContent = "Copier"; }, 1500); }
+    catch (e) { prompt("Copie ce lien :", link); }
+  };
+  $("#toggle").onclick = async () => {
+    if (!state.active && !state.questions.length) { alert("Crée d'abord au moins une question."); return; }
+    state.active = !state.active;
+    if (await persist()) render();
+  };
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; editing = null; render(); });
+  document.querySelectorAll("#roles button").forEach(b => b.onclick = () => {
+    role = b.dataset.role; editing = null; tab = "build";
+    try { sessionStorage.setItem("qrole", role); } catch (e) {}
+    render();
+  });
+  bindLibrary();
+  render();
+}
+
+/* ---------- Questionnaires enregistrés ---------- */
+let flashTimer;
+function flash(msg) {
+  const m = $("#curname"); if (!m) return;
+  m.textContent = msg; clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { if ($("#curname")) $("#curname").textContent = curName(); }, 4000);
+}
+const curName = () => state.name ? "Questionnaire en cours : " + state.name : "Questionnaire en cours : pas encore enregistré";
+const dateOnly = t => t ? new Date(t).toLocaleDateString("fr-FR") : "";
+const fmtDate = t => new Date(t).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+
+/* Reprend le lien tapé dans le champ vidéo (même sans avoir cliqué sur son bouton)
+   pour qu'il soit enregistré avec le questionnaire. */
+async function syncVideo() {
+  const f = $("#vurl"); if (!f) return true;
+  const url = f.value.trim();
+  if (!url) return true; // champ vide : la vidéo en place (lien ou fichier) est conservée
+  if (!/^https?:\/\/\S+$/i.test(url)) return false;
+  if (url === state.video) return true;
+  state.video = url;
+  return persist();
+}
+
+function bindLibrary() {
+  $("#bsave").onclick = () => {
+    $("#sname").value = state.name || "Questionnaire du " + new Date().toLocaleDateString("fr-FR");
+    $("#serr").textContent = ""; $("#dsave").showModal(); $("#sname").select();
+  };
+  $("#scancel").onclick = () => $("#dsave").close();
+  $("#sform").onsubmit = async e => {
+    e.preventDefault();
+    const name = $("#sname").value.trim(); if (!name) return;
+    if (!(await syncVideo())) { $("#serr").textContent = "Le lien de la vidéo doit commencer par http:// ou https://"; return; }
+    try {
+      const list = await api("GET", "/api/admin/saved");
+      if (list.some(x => x.id !== "auto" && x.name.toLowerCase() === name.toLowerCase()) &&
+          !confirm("Un questionnaire « " + name + " » existe déjà. Le remplacer par celui-ci ?")) return;
+      await api("POST", "/api/admin/saved", { name });
+      state.name = name; $("#dsave").close(); render(); flash("Enregistré sous « " + name + " »");
+    } catch (x) { $("#serr").textContent = x.message; }
+  };
+  $("#bopen").onclick = async () => {
+    $("#oerr").textContent = "";
+    try { await showSaved(); $("#dopen").showModal(); } catch (x) { alert(x.message); }
+  };
+  $("#oclose").onclick = () => $("#dopen").close();
+  $("#bverify").onclick = () => { $("#vcode").value = ""; $("#vres").innerHTML = ""; $("#dverify").showModal(); $("#vcode").focus(); };
+  $("#vclose").onclick = () => $("#dverify").close();
+  $("#vform").onsubmit = async e => {
+    e.preventDefault();
+    const res = $("#vres");
+    try {
+      const r = await api("POST", "/api/admin/verify", { code: $("#vcode").value });
+      res.innerHTML = r.found
+        ? `<div class="verdict ${r.expired ? "warn" : "ok"}"><strong>${r.expired ? "Pass périmé" : "Test réussi"}</strong>${esc(r.name)}${r.role ? " · " + esc(r.role) : ""}${r.company ? "<br>" + esc(r.company) : ""}<br><span class="meta">${r.expired ? "Périmé depuis le " : "Valable jusqu'au "}${dateOnly(r.expires)}<br>${esc(r.email)}${r.phone ? " · " + esc(r.phone) : ""}<br>Réussi le ${fmtDate(r.at)}${r.tries > 1 ? " après " + r.tries + " essais" : ""}${r.source ? "<br>Questionnaire : " + esc(r.source) : ""}</span></div>`
+        : `<div class="verdict ko"><strong>Code inconnu</strong>Aucune personne n'a réussi le test avec ce code.</div>`;
+    } catch (x) { res.innerHTML = `<div class="verdict ko">${esc(x.message)}</div>`; }
+  };
+}
+
+async function showSaved(list) {
+  list = list || await api("GET", "/api/admin/saved");
+  const box = $("#slist");
+  if (!list.length) { box.innerHTML = `<div class="meta">Aucun questionnaire enregistré pour l'instant. Utilise « Enregistrer ce questionnaire ».</div>`; return; }
+  box.innerHTML = list.map(x => `<div class="saved"><div><div class="q-text">${esc(x.name)}</div>
+      <div class="meta">${x.questions} question${x.questions>1?"s":""} · ${x.answers} réponse${x.answers>1?"s":""}${x.video?" · vidéo":""} · ${fmtDate(x.at)}</div></div>
+      <div class="row"><button class="btn sm primary" data-open="${esc(x.id)}" data-name="${esc(x.name)}">Ouvrir</button>
+      <button class="btn sm ghost danger" data-rm="${esc(x.id)}" data-name="${esc(x.name)}">Supprimer</button></div></div>`).join("");
+  box.querySelectorAll("[data-open]").forEach(b => b.onclick = async () => {
+    const autoNote = state.questions.length || state.answers.length ? "\n\nLe questionnaire en cours sera gardé dans « Sauvegarde automatique »." : "";
+    if (!confirm("Ouvrir « " + b.dataset.name + " » ?" + autoNote + "\nIl sera fermé au public : tu pourras le rouvrir avec le bouton Ouvrir/Fermer.")) return;
+    try {
+      await api("POST", "/api/admin/saved/" + encodeURIComponent(b.dataset.open) + "/open");
+      all = await api("GET", "/api/admin/state"); tab = "build"; editing = null;
+      $("#dopen").close(); render(); flash("Ouvert : « " + b.dataset.name + " »");
+    } catch (x) { $("#oerr").textContent = x.message; }
+  });
+  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
+    if (!confirm("Supprimer définitivement « " + b.dataset.name + " » avec ses réponses ?")) return;
+    try { await showSaved(await api("DELETE", "/api/admin/saved/" + encodeURIComponent(b.dataset.rm))); }
+    catch (x) { $("#oerr").textContent = x.message; }
+  });
+}
+
+function render() {
+  $("#status").classList.toggle("on", state.active);
+  $("#statusText").textContent = (state.active ? "Ouvert aux " : "Fermé aux ") + ROLES[role].toLowerCase();
+  document.querySelectorAll("#roles button").forEach(b => {
+    const r = b.dataset.role, n = all.answers.filter(a => roleOf(a) === r).length;
+    b.innerHTML = `<span class="dot${all.groups[r].active ? " live" : ""}"></span>${ROLES[r]}<span class="count">${n || ""}</span>`;
+    b.setAttribute("aria-current", r === role);
+  });
+  $("#toggle").textContent = state.active ? "Fermer" : "Ouvrir";
+  $("#curname").textContent = curName();
+  $("#cQ").textContent = state.questions.length || "";
+  $("#cR").textContent = state.answers.length || "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  $("#view").innerHTML = tab === "build" ? buildView() : resultsView();
+  bind();
+}
+
+function optRow(v, checked) {
+  return `<div class="row"><input type="text" class="o" value="${esc(v)}" aria-label="Option"><label class="meta row" style="gap:6px;white-space:nowrap"><input type="checkbox" class="ok"${checked?" checked":""}> Correcte</label><button type="button" class="btn sm ghost rm">Retirer</button></div>`;
+}
+
+function buildView() {
+  const q = editing === "new" ? { type: "choice", text: "", options: ["", ""] } : state.questions.find(x => x.id === editing);
+  if (q) return `<form class="card stack" id="qform">
+      <div><label class="f" for="qt">Question</label><input type="text" id="qt" value="${esc(q.text)}" required maxlength="500" autofocus></div>
+      <div><label class="f" for="qtype">Type de réponse</label>
+        <select id="qtype"><option value="choice"${q.type==="choice"?" selected":""}>Choix unique</option><option value="multi"${q.type==="multi"?" selected":""}>Choix multiple</option><option value="text"${q.type==="text"?" selected":""}>Texte libre</option></select></div>
+      <div id="optbox" class="${q.type==="text"?"hidden":""}"><label class="f">Options <span class="meta">· coche la bonne réponse, ou aucune pour une question d'opinion</span></label><div class="opts" id="opts">
+        ${q.options.map((o,i)=>optRow(o, q.type!=="text" && (q.correct||[]).includes(i))).join("")}
+      </div><button type="button" class="btn sm ghost" id="addopt" style="margin-top:8px">Ajouter une option</button></div>
+      <div id="textbox" class="${q.type==="text"?"":"hidden"}"><label class="f" for="qc">Réponses acceptées <span class="meta">· séparées par une virgule, vide pour accepter toute réponse</span></label>
+        <input type="text" id="qc" value="${q.type==="text"?esc((q.correct||[]).join(", ")):""}"></div>
+      <div class="row"><button class="btn primary" type="submit">Enregistrer</button><button type="button" class="btn ghost" id="cancel">Annuler</button></div>
+    </form>`;
+  const mine = (state.video || "").startsWith("/videos/");
+  const vid = `<div class="card stack"><div><label class="f" for="vurl">Vidéo avant le questionnaire <span class="meta">· ${mine ? "fichier envoyé depuis ton PC" : "lien YouTube ou lien direct vers un fichier .mp4, vide pour aucune vidéo"}</span></label>
+    <div class="row"><input type="text" id="vurl" value="${mine ? "" : esc(state.video || "")}" placeholder="${mine ? "Fichier en place · colle un lien pour le remplacer" : "https://www.youtube.com/watch?v=..."}" maxlength="500"><button class="btn" id="vsave">Enregistrer</button></div></div>
+    <div class="err" id="verr" role="status"></div></div>`;
+  if (!state.questions.length)
+    return vid + `<div class="empty"><strong>Aucune question pour l'instant</strong>Crée ta première question, puis ouvre le questionnaire.<div style="margin-top:16px"><button class="btn primary" id="new">Nouvelle question</button></div></div>`;
+  return vid + state.questions.map((x, i) => `<div class="card"><div class="q-head"><div>
+      <div class="q-num">Question ${i+1}</div><div class="q-text">${esc(x.text)}</div>
+      <div class="meta">${{choice:"Choix unique",multi:"Choix multiple",text:"Texte libre"}[x.type]}${x.type!=="text"?" · "+x.options.length+" options":""} · ${(x.correct||[]).length?"avec bonne réponse":"question d'opinion"}</div></div>
+      <div class="row"><button class="btn sm ghost" data-up="${x.id}" ${i===0?"disabled":""}>Monter</button><button class="btn sm ghost" data-edit="${x.id}">Modifier</button><button class="btn sm ghost danger" data-del="${x.id}">Supprimer</button></div></div></div>`).join("")
+    + `<button class="btn primary" id="new">Nouvelle question</button>`;
+}
+
+function resultsView() {
+  const n = state.answers.length;
+  if (!n) return `<div class="empty"><strong>Aucune réponse</strong>Les réponses apparaissent ici dès que quelqu'un répond via le lien.</div>`;
+  let html = state.questions.map((q,i)=>{
+    let body;
+    if (q.type === "text") {
+      body = state.answers.map(a=>a.r[q.id]).filter(Boolean).map(t=>`<div class="ans">${esc(t)}</div>`).join("") || `<div class="meta">Pas de réponse</div>`;
+    } else {
+      const counts = q.options.map((_,j)=>state.answers.filter(a=>[].concat(a.r[q.id]??[]).includes(j)).length);
+      body = `<div class="res">${q.options.map((o,j)=>`<div>${esc(o)}</div><div class="n">${counts[j]} · ${Math.round(counts[j]/n*100)} %</div><div class="bar"><i style="width:${counts[j]/n*100}%"></i></div>`).join("")}</div>`;
+    }
+    return `<div class="card"><div class="q-num">Question ${i+1}</div><div class="q-text" style="margin-bottom:8px">${esc(q.text)}</div>${body}</div>`;
+  }).join("");
+  const when = a => new Date(a.at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  const rows = [...state.answers].reverse().map(a => `<tr><td>${when(a)}</td><td>${esc(a.company || "")}</td><td>${esc(a.last || a.name || "")}</td><td>${esc(a.first || "")}</td><td>${esc(a.phone || "")}</td><td>${esc(a.email)}</td><td>${esc(a.role || "")}</td><td class="mono">${esc(a.code || "")}</td><td class="num">${a.tries || 1}</td><td>${dateOnly(a.expires)}</td><td><span class="pill ${a.expired ? "exp" : "val"}">${a.expired ? "Périmé" : "Valide"}</span></td><td>${a.code ? `<button class="btn sm ghost" data-pdf="${esc(a.code)}">PDF</button>` : ""}</td></tr>`).join("");
+  html += `<div class="card"><div class="head2"><div class="q-text">Participants</div><button class="btn sm ghost" id="csv">Exporter en CSV</button></div>
+    <div class="sheet"><table><thead><tr><th>Date</th><th>Entreprise</th><th>Nom</th><th>Prénom</th><th>Téléphone</th><th>E-mail</th><th>Rôle</th><th>Code</th><th>Essais</th><th>Expire le</th><th>Profil</th><th>Pass</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  html += `<div class="row"><span class="meta">${n} réponse${n>1?"s":""}</span><button class="btn sm ghost danger" id="clear">Effacer les réponses</button></div>`;
+  return html;
+}
+
+function exportCsv() {
+  const cell = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  const head = ["Date", "Entreprise", "Nom", "Prénom", "Téléphone", "E-mail", "Rôle", "Code", "Essais", "Expire le", "Profil"];
+  const lines = state.answers.map(a => [new Date(a.at).toLocaleString("fr-FR"), a.company, a.last || a.name, a.first, a.phone ? "'" + a.phone : "", a.email, a.role, a.code ? "'" + a.code : "", a.tries || 1, dateOnly(a.expires), a.expired ? "Périmé" : "Valide"].map(cell).join(";"));
+  const blob = new Blob(["﻿" + [head.map(cell).join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const l = document.createElement("a"); l.href = URL.createObjectURL(blob); l.download = "participants.csv"; l.click(); URL.revokeObjectURL(l.href);
+}
+
+function bind() {
+  const on = (s, ev, fn) => { const e = $(s); if (e) e.addEventListener(ev, fn); };
+  on("#csv", "click", exportCsv);
+  document.querySelectorAll("[data-pdf]").forEach(b => b.onclick = async () => {
+    try {
+      const a = all.answers.find(x => x.code === b.dataset.pdf);
+      if (!a) throw new Error("Pass introuvable");
+      makePassPdf(a);
+    } catch (x) { alert(x.message); }
+  });
+  on("#vsave", "click", async () => {
+    let url = $("#vurl").value.trim(); const msg = $("#verr");
+    if (!url && (state.video || "").startsWith("/videos/")) {
+      if (!confirm("Retirer la vidéo envoyée ? Le fichier sera supprimé du serveur.")) return;
+    }
+    if (url && !/^https?:\/\/\S+$/i.test(url)) { msg.style.color = "var(--danger)"; msg.textContent = "Le lien doit commencer par http:// ou https://"; return; }
+    state.video = url;
+    if (await persist()) { msg.style.color = "var(--accent)"; msg.textContent = url ? "Vidéo enregistrée" : "Vidéo retirée"; render(); $("#verr").style.color = "var(--accent)"; $("#verr").textContent = url ? "Vidéo enregistrée" : "Vidéo retirée"; }
+  });
+  on("#new", "click", () => { editing = "new"; render(); });
+  on("#cancel", "click", () => { editing = null; render(); });
+  on("#qtype", "change", e => {
+    $("#optbox").classList.toggle("hidden", e.target.value === "text");
+    $("#textbox").classList.toggle("hidden", e.target.value !== "text");
+  });
+  on("#addopt", "click", () => {
+    const d = document.createElement("div"); d.innerHTML = optRow("", false);
+    $("#opts").appendChild(d.firstElementChild); $("#opts").lastElementChild.querySelector("input").focus(); bindRm();
+  });
+  bindRm();
+  on("#qform", "submit", async e => {
+    e.preventDefault();
+    const type = $("#qtype").value, text = $("#qt").value.trim();
+    let options = [], correct = [];
+    if (type === "text") {
+      correct = $("#qc").value.split(",").map(s => s.trim()).filter(Boolean);
+    } else {
+      document.querySelectorAll("#opts > .row").forEach(r => {
+        const v = r.querySelector(".o").value.trim();
+        if (!v) return;
+        if (r.querySelector(".ok").checked) correct.push(options.length);
+        options.push(v);
+      });
+      if (options.length < 2) { alert("Ajoute au moins deux options."); return; }
+      if (type === "choice" && correct.length > 1) { alert("Une question à choix unique n'a qu'une seule bonne réponse."); return; }
+    }
+    if (editing === "new") state.questions.push({ id: uid(), type, text, options, correct });
+    else Object.assign(state.questions.find(x => x.id === editing), { type, text, options, correct });
+    editing = null;
+    if (await persist()) render();
+  });
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editing = b.dataset.edit; render(); });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Supprimer cette question ? Ses réponses ne seront plus affichées.")) return;
+    state.questions = state.questions.filter(x => x.id !== b.dataset.del);
+    if (!state.questions.length) state.active = false;
+    if (await persist()) render();
+  });
+  document.querySelectorAll("[data-up]").forEach(b => b.onclick = async () => {
+    const i = state.questions.findIndex(x => x.id === b.dataset.up);
+    if (i > 0) { [state.questions[i-1], state.questions[i]] = [state.questions[i], state.questions[i-1]]; if (await persist()) render(); }
+  });
+  on("#clear", "click", async () => {
+    if (!confirm("Effacer toutes les réponses des " + ROLES[role].toLowerCase() + " ? Cette action est définitive.")) return;
+    await api("DELETE", "/api/admin/answers/" + role); state.answers = []; render();
+  });
+}
+function bindRm() { document.querySelectorAll(".rm").forEach(b => b.onclick = () => b.parentElement.remove()); }
+
+boot();
+</script>
+</body>
+</html>

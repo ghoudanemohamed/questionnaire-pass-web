@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vérification du pass</title>
+<style>
+:root{color-scheme:dark;--text:#f6f2ff;--text2:#c9bdea;--muted:#9a8cc4;--ok:#86efac;--ko:#ff9a8f}
+*{box-sizing:border-box}
+html{background:#1a0d3d;min-height:100%}
+body{margin:0;color:var(--text);font:400 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
+  background:radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.6),transparent 70%),radial-gradient(45% 40% at 92% 18%,rgba(217,70,239,.32),transparent 70%),radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.45),transparent 70%)}
+.card{width:min(420px,100%);text-align:center;padding:40px 24px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(8,2,28,.35)}
+.mark{width:72px;height:72px;margin:0 auto 20px;border-radius:50%;display:grid;place-items:center;font-size:36px;line-height:1}
+.ok .mark{background:rgba(74,222,128,.15);border:2px solid var(--ok);color:var(--ok)}
+.ko .mark{background:rgba(255,154,143,.15);border:2px solid var(--ko);color:var(--ko)}
+h1{font-size:24px;font-weight:500;margin:0 0 8px}
+.ok h1{color:var(--ok)}.ko h1{color:var(--ko)}
+.warn .mark{background:rgba(251,191,36,.15);border:2px solid #fcd34d;color:#fcd34d}.warn h1{color:#fcd34d}
+p{margin:0;color:var(--text2)}
+.who{font-size:20px;color:var(--text);margin-top:16px}
+code{display:inline-block;margin-top:20px;font:500 18px ui-monospace,Consolas,monospace;letter-spacing:.12em;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="card" id="c"><p>Vérification en cours</p></div>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const code = new URLSearchParams(location.search).get("c") || "";
+(async () => {
+  const c = document.getElementById("c");
+  try {
+    const d = await rpc("pass_status", { p_code: code });
+    if (d.state === "expired") {
+      const when = new Date(d.expires).toLocaleDateString("fr-FR");
+      c.className = "card warn";
+      c.innerHTML = `<div class="mark" aria-hidden="true">!</div><h1>Pass périmé</h1><p>Périmé depuis le ${when}. Il faut repasser le test pour le renouveler.</p>
+        <div class="who">${esc(d.name)}</div><code>${esc(code.toUpperCase())}</code>`;
+    } else if (d.valid) {
+      const when = new Date(d.expires).toLocaleDateString("fr-FR");
+      c.className = "card ok";
+      c.innerHTML = `<div class="mark" aria-hidden="true">✓</div><h1>Pass valable</h1>
+        <p>${d.role === "intervenant" ? "Intervenant" : "Visiteur"}</p><p>Valable jusqu'au ${when}</p><div class="who">${esc(d.name)}</div><code>${esc(code.toUpperCase())}</code>`;
+    } else {
+      c.className = "card ko";
+      c.innerHTML = `<div class="mark" aria-hidden="true">✕</div><h1>Pass non valable</h1><p>Ce code ne correspond à aucun pass.</p><code>${esc(code.toUpperCase())}</code>`;
+    }
+  } catch (e) {
+    c.innerHTML = `<p>Connexion impossible, réessaie.</p>`;
+  }
+})();
+</script>
+</body>
+</html>
