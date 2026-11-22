@@ -38,6 +38,17 @@ create table if not exists saved (
 
 create table if not exists auth_fail (at timestamptz not null default now());
 
+-- Journal des tentatives : une ligne par question et par envoi (juste ou faux). Sert aux statistiques.
+create table if not exists attempt_log (
+  at timestamptz not null default now(),
+  role text not null,
+  q_id text not null,
+  ok boolean not null
+);
+
+alter table attempt_log enable row level security;
+revoke all on attempt_log from anon, authenticated;
+
 alter table settings enable row level security;
 alter table groups enable row level security;
 alter table answers enable row level security;
@@ -103,7 +114,7 @@ create or replace function submit_answers(
 ) returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   g groups; q jsonb; qid text; qtype text; nopts int; correct jsonb; v jsonb; val text; arr jsonb;
-  graded boolean; missing boolean; is_ok boolean; wrong jsonb := '[]'; clean jsonb := '{}';
+  graded boolean; missing boolean; is_ok boolean; wrong jsonb := '[]'; clean jsonb := '{}'; evals jsonb := '[]';
   v_phone text; v_ym text; v_n int; v_code text; a answers;
 begin
   if p_role not in ('visiteur', 'intervenant') then return jsonb_build_object('error', 'Rôle inconnu'); end if;
@@ -150,8 +161,12 @@ begin
     else is_ok := correct @> v;
     end if;
     if not is_ok then wrong := wrong || to_jsonb(qid); end if;
+    evals := evals || jsonb_build_object('q', qid, 'ok', is_ok);
     clean := clean || jsonb_build_object(qid, case when missing then null else v end);
   end loop;
+
+  insert into attempt_log (role, q_id, ok)
+    select p_role, e->>'q', (e->>'ok')::boolean from jsonb_array_elements(evals) e;
 
   if jsonb_array_length(wrong) > 0 then return jsonb_build_object('ok', false, 'wrong', wrong); end if;
 
@@ -189,7 +204,13 @@ begin
   return jsonb_build_object(
     'groups', (select jsonb_object_agg(role, jsonb_build_object('questions', questions, 'active', active, 'video', video)) from groups),
     'answers', coalesce((select jsonb_agg(_answer_view(to_jsonb(a) - 'id') order by a.at, a.id) from answers a), '[]'::jsonb),
-    'name', coalesce((select value from settings where key = 'name'), ''));
+    'name', coalesce((select value from settings where key = 'name'), ''),
+    'qstats', coalesce((
+      select jsonb_object_agg(role, per) from (
+        select role, jsonb_object_agg(q_id, jsonb_build_object('n', n, 'wrong', w)) per from (
+          select role, q_id, count(*) n, count(*) filter (where not ok) w from attempt_log group by role, q_id
+        ) s group by role
+      ) t), '{}'::jsonb));
 end $$;
 
 create or replace function admin_save_group(p_pwd text, p_role text, p_questions jsonb, p_active boolean, p_video text)
@@ -226,6 +247,7 @@ language plpgsql security definer set search_path = public, extensions as $$
 begin
   if not _admin_ok(p_pwd) then return jsonb_build_object('error', 'auth'); end if;
   delete from answers where role = p_role;
+  delete from attempt_log where role = p_role;
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -296,6 +318,7 @@ begin
       video = coalesce(s.groups->role_->>'video', '') where role = role_;
   end loop;
   delete from answers;
+  delete from attempt_log;
   insert into answers (code, at, role, first, last, company, phone, email, tries, r)
     select a->>'code', (a->>'at')::timestamptz, a->>'role', a->>'first', a->>'last', a->>'company',
            a->>'phone', a->>'email', coalesce((a->>'tries')::int, 1), coalesce(a->'r', '{}')
