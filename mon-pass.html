@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a0d3d">
+<title>Mon pass</title>
+<style>
+:root{color-scheme:dark;--text:#f6f2ff;--text2:#c9bdea;--muted:#9a8cc4;--ok:#86efac;--ko:#ff9a8f;--warn:#fcd34d}
+*{box-sizing:border-box}
+html{background:#1a0d3d;min-height:100%}
+body{margin:0;color:var(--text);font:400 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
+  background:radial-gradient(55% 45% at 12% 0%,rgba(139,92,246,.6),transparent 70%),radial-gradient(45% 40% at 92% 18%,rgba(217,70,239,.32),transparent 70%),radial-gradient(60% 50% at 55% 108%,rgba(99,102,241,.45),transparent 70%)}
+.card{width:min(380px,100%);text-align:center;padding:32px 24px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(8,2,28,.35)}
+h1{font-size:22px;font-weight:500;margin:0 0 4px}
+p{margin:0;color:var(--text2)}
+.status{display:inline-block;margin:12px 0 16px;padding:4px 14px;border-radius:999px;font-size:14px;border:1px solid}
+.ok .status{color:var(--ok);border-color:var(--ok);background:rgba(74,222,128,.12)}
+.warn .status{color:var(--warn);border-color:var(--warn);background:rgba(251,191,36,.12)}
+.qr{width:240px;height:240px;margin:0 auto;padding:12px;background:#fff;border-radius:12px}
+.qr svg{display:block;width:100%;height:100%}
+.warn .qr{opacity:.35}
+.who{font-size:20px;margin-top:16px}
+code{display:block;margin-top:8px;font:500 18px ui-monospace,Consolas,monospace;letter-spacing:.12em;color:var(--muted)}
+.hint{margin-top:20px;font-size:14px;color:var(--muted)}
+label{display:block;text-align:left;font-size:14px;color:var(--text2);margin:20px 0 6px}
+input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(10,4,30,.55);color:var(--text);font:500 18px ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase}
+input:focus-visible,button:focus-visible{outline:2px solid #c4b5fd;outline-offset:2px}
+.btn{margin-top:16px;width:100%;padding:12px;border:0;border-radius:10px;background:#7c3aed;color:#fff;font:500 16px system-ui,sans-serif;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text2);margin-top:12px;font-size:14px;padding:8px}
+.err{min-height:20px;margin-top:10px;color:var(--ko);font-size:14px}
+</style>
+</head>
+<body>
+<div class="card" id="c"><p>Chargement</p></div>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const KEY = "qp-code", c = document.getElementById("c");
+const store = {
+  get() { try { return localStorage.getItem(KEY) || ""; } catch (_) { return ""; } },
+  set(v) { try { localStorage.setItem(KEY, v); } catch (_) {} },
+  del() { try { localStorage.removeItem(KEY); } catch (_) {} }
+};
+const clean = v => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const passUrl = code => new URL("pass.html?c=" + encodeURIComponent(code), location.href).href;
+
+function ask(msg = "") {
+  c.className = "card";
+  c.innerHTML = `<h1>Mon pass</h1><p>Entre le code reçu à la fin du questionnaire, ton pass s'affichera sur ce téléphone.</p>
+    <form id="f"><label for="k">Ton code</label><input id="k" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="V26110001" required>
+    <div class="err" role="alert">${esc(msg)}</div><button class="btn" type="submit">Afficher mon pass</button></form>`;
+  document.getElementById("f").onsubmit = e => {
+    e.preventDefault();
+    const k = clean(document.getElementById("k").value);
+    if (k) show(k, true);
+  };
+}
+
+async function show(code, typed) {
+  c.className = "card"; c.innerHTML = "<p>Chargement</p>";
+  try {
+    const d = await rpc("pass_status", { p_code: code });
+    if (d.state === "unknown") { store.del(); return ask(typed ? "Ce code ne correspond à aucun pass." : "Ce pass n'existe plus. Entre un autre code."); }
+    store.set(code);
+    const when = new Date(d.expires).toLocaleDateString("fr-FR");
+    const expired = d.state === "expired";
+    let qr = "";
+    if (window.qrcode) { const q = window.qrcode(0, "M"); q.addData(passUrl(code)); q.make(); qr = q.createSvgTag({ scalable: true, margin: 0 }); }
+    c.className = "card " + (expired ? "warn" : "ok");
+    c.innerHTML = `<h1>${d.role === "intervenant" ? "Intervenant" : "Visiteur"}</h1>
+      <span class="status">${expired ? "Périmé depuis le " + when : "Valable jusqu'au " + when}</span>
+      <div class="qr" role="img" aria-label="QR code du pass">${qr}</div>
+      <div class="who">${esc(d.name)}</div><code>${esc(code)}</code>
+      <p class="hint">${expired ? "Repasse le test pour renouveler ton pass." : "Présente ce QR code à l'accueil. Ajoute cette page à l'écran d'accueil de ton téléphone pour la retrouver en un geste."}</p>
+      <button class="btn ghost" id="other" type="button">Utiliser un autre code</button>`;
+    document.getElementById("other").onclick = () => { store.del(); ask(); };
+  } catch (e) {
+    c.innerHTML = `<p>Connexion impossible, réessaie.</p><button class="btn" id="retry" type="button">Réessayer</button>`;
+    document.getElementById("retry").onclick = () => show(code, typed);
+  }
+}
+
+const fromUrl = clean(new URLSearchParams(location.search).get("c"));
+const first = fromUrl || clean(store.get());
+first ? show(first, false) : ask();
+if (fromUrl) { try { history.replaceState(null, "", location.pathname); } catch (_) {} }
+</script>
+</body>
+</html>

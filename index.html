@@ -154,7 +154,7 @@ function loadYT(ok, fail) {
 }
 function playVideo() {
   const id = ytId(video);
-  app.innerHTML = `<h1>Vidéo</h1><p class="sub">Regarde la vidéo jusqu'à la fin : le questionnaire s'affichera ensuite.</p>
+  app.innerHTML = `<h1>Vidéo</h1><p class="sub">Regarde la vidéo en entier, sans avancer : le questionnaire s'affichera à la fin. Touche la vidéo pour la lancer ou la mettre en pause.</p>
     <div class="card player">${id ? `<div id="yt"></div>` : `<video id="v" controls playsinline preload="auto"></video>`}</div>
     <div class="err" id="verr" role="alert"></div>`;
   const fail = () => {
@@ -162,12 +162,31 @@ function playVideo() {
     document.getElementById("skip").onclick = () => form();
   };
   if (id) {
-    loadYT(() => new YT.Player("yt", { videoId: id, width: "100%", height: "100%",
-      playerVars: { rel: 0, playsinline: 1, autoplay: 1 },
-      events: { onStateChange: e => { if (e.data === 0) form(); }, onError: fail } }), fail);
+    /* Commandes masquées, et tout saut en avant est annulé : le questionnaire s'ouvre seulement à la fin réelle */
+    loadYT(() => {
+      let maxT = 0, timer, p;
+      p = new YT.Player("yt", { videoId: id, width: "100%", height: "100%",
+        playerVars: { rel: 0, playsinline: 1, autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1 },
+        events: {
+          onReady: () => { timer = setInterval(() => { try {
+            const t = p.getCurrentTime();
+            if (t > maxT + 2) p.seekTo(maxT, true); else if (t > maxT) maxT = t;
+          } catch (_) {} }, 400); },
+          onStateChange: e => {
+            if (e.data !== 0) return;
+            let dur = 0; try { dur = p.getDuration(); } catch (_) {}
+            if (dur && maxT < dur - 5) { p.seekTo(maxT, true); p.playVideo(); return; }
+            clearInterval(timer); form();
+          },
+          onError: fail } });
+    }, fail);
   } else {
     const v = document.getElementById("v");
-    v.src = video; v.onended = () => form(); v.onerror = fail;
+    let maxT = 0;
+    v.ontimeupdate = () => { if (!v.seeking && v.currentTime > maxT) maxT = v.currentTime; };
+    v.onseeking = () => { if (v.currentTime > maxT + 0.5) v.currentTime = maxT; };
+    v.onended = () => form(); v.onerror = fail;
+    v.src = video;
     v.play().catch(() => {});
   }
 }
@@ -216,7 +235,10 @@ async function send(e) {
     try { sessionStorage.removeItem("qp-draft"); } catch (_) {}
     app.innerHTML = `<div class="empty"><strong>Bravo, ${esc(who.first)}</strong>Toutes tes réponses sont justes${tries>1?" après "+tries+" essais":""}.
       <div class="code" aria-label="Ton code">${esc(d.code)}</div><span class="meta">Ton code personnel, valable 6 mois : garde-le</span>
-      <div style="margin-top:24px"><button class="btn" id="pdf" type="button">Télécharger mon pass en PDF</button></div><div class="err" id="pdferr" role="alert"></div></div>`;
+      <div style="margin-top:24px"><button class="btn" id="pdf" type="button">Télécharger mon pass en PDF</button></div>
+      <div style="margin-top:12px"><a class="btn" style="display:inline-flex;align-items:center;text-decoration:none;background:transparent;border:1px solid rgba(255,255,255,.2)" href="mon-pass.html?c=${encodeURIComponent(d.code)}">Garder mon pass sur mon téléphone</a></div>
+      <div class="err" id="pdferr" role="alert"></div></div>`;
+    try { localStorage.setItem("qp-code", d.code); } catch (_) {}
     document.getElementById("pdf").onclick = () => {
       try { makePassPdf(d); } catch (x) { document.getElementById("pdferr").textContent = x.message; }
     };
