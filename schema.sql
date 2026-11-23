@@ -568,6 +568,58 @@ begin
   return _requests_list();
 end $$;
 
+-- Chacun (principal ou non) change son propre identifiant et/ou son mot de passe.
+-- Il faut redonner le mot de passe actuel. Un champ vide = on ne change pas.
+create or replace function admin_change_account(p_pwd text, p_current text, p_new_name text, p_new_pwd text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare w jsonb := _admin_who(p_pwd); nm text := btrim(coalesce(p_new_name, '')); np text := coalesce(p_new_pwd, '');
+        h text; cur text; r record; main_ boolean; me text;
+begin
+  if w is null then return jsonb_build_object('error', 'auth'); end if;
+  main_ := w->>'level' = 'main';
+  if (select count(*) from auth_fail where at > now() - interval '10 minutes') >= 10 then
+    return jsonb_build_object('error', 'auth');
+  end if;
+  if main_ then
+    select value into h from settings where key = 'admin_hash';
+    me := coalesce((select value from settings where key = 'admin_user'), 'admin');
+  else
+    me := w->>'name';
+    select hash into h from admins where name = me;
+  end if;
+  if h is null or crypt(coalesce(p_current, ''), h) <> h then
+    insert into auth_fail default values;
+    return jsonb_build_object('error', 'Mot de passe actuel incorrect');
+  end if;
+  if nm = '' and np = '' then return jsonb_build_object('error', 'Rien à changer'); end if;
+  if nm <> '' and lower(nm) <> lower(me) then
+    if nm !~ '^[A-Za-z0-9._@-]{3,40}$' then
+      return jsonb_build_object('error', 'Identifiant : 3 à 40 caractères (lettres, chiffres, . _ - @)');
+    end if;
+    if lower(nm) = lower(coalesce((select value from settings where key = 'admin_user'), 'admin'))
+       or exists (select 1 from admins where lower(name) = lower(nm))
+       or exists (select 1 from admin_requests where lower(name) = lower(nm)) then
+      return jsonb_build_object('error', 'Cet identifiant est déjà pris');
+    end if;
+  else
+    nm := me;
+  end if;
+  if np <> '' and (length(np) < 8 or length(np) > 200) then
+    return jsonb_build_object('error', 'Mot de passe : 8 caractères minimum');
+  end if;
+  if main_ then
+    insert into settings (key, value) values ('admin_user', nm)
+      on conflict (key) do update set value = excluded.value;
+    if np <> '' then
+      update settings set value = crypt(np, gen_salt('bf')) where key = 'admin_hash';
+    end if;
+  else
+    update admins set name = nm, hash = case when np <> '' then crypt(np, gen_salt('bf')) else hash end
+      where name = me;
+  end if;
+  return jsonb_build_object('ok', true, 'name', nm);
+end $$;
+
 -- ---- RGPD : la personne supprime elle-même ses données (code + e-mail du pass) ----
 create or replace function delete_my_data(p_code text, p_email text) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -600,5 +652,6 @@ grant execute on function
   admin_list_admins(text), admin_add_admin(text, text, text, jsonb), admin_set_perms(text, text, jsonb), admin_remove_admin(text, text),
   admin_request_account(text, text), admin_request_status(text, text), admin_list_requests(text),
   admin_approve_request(text, text, jsonb), admin_reject_request(text, text),
+  admin_change_account(text, text, text, text),
   delete_my_data(text, text)
 to anon;
