@@ -197,6 +197,9 @@ async function api(method, path, body) {
   else if ((m = path.match(/^\/api\/admin\/config\/(\w+)$/))) { fn = "admin_save_group"; Object.assign(args, { p_role: m[1], p_questions: body.questions, p_active: body.active, p_video: body.video || "" }); }
   else if ((m = path.match(/^\/api\/admin\/answers\/(\w+)$/))) { fn = "admin_clear_answers"; args.p_role = m[1]; }
   else if ((m = path.match(/^\/api\/admin\/pass\/([^/]+)$/))) { fn = "admin_revoke"; args.p_code = decodeURIComponent(m[1]); }
+  else if (path === "/api/admin/requests" && method === "GET") fn = "admin_list_requests";
+  else if ((m = path.match(/^\/api\/admin\/requests\/(.+)\/approve$/))) { fn = "admin_approve_request"; args.p_name = decodeURIComponent(m[1]); args.p_perms = body.perms; }
+  else if ((m = path.match(/^\/api\/admin\/requests\/(.+)$/))) { fn = "admin_reject_request"; args.p_name = decodeURIComponent(m[1]); }
   else if (path === "/api/admin/admins" && method === "GET") fn = "admin_list_admins";
   else if (path === "/api/admin/admins") { fn = "admin_add_admin"; args.p_name = body.name; args.p_new = body.password; args.p_perms = body.perms; }
   else if ((m = path.match(/^\/api\/admin\/admins\/(.+)\/perms$/))) { fn = "admin_set_perms"; args.p_name = decodeURIComponent(m[1]); args.p_perms = body.perms; }
@@ -216,18 +219,61 @@ async function api(method, path, body) {
 async function boot() {
   if (!pwd) return login();
   try { all = await api("GET", "/api/admin/state"); shell(); }
-  catch (e) { if (e.auth) { pwd = ""; return login("Mot de passe incorrect"); } root.innerHTML = `<div class="empty">Serveur injoignable</div>`; }
+  catch (e) {
+    if (e.auth) {
+      /* Le compte est-il simplement en attente de validation ? */
+      const i = pwd.indexOf(":"); let msg = "Identifiant ou mot de passe incorrect";
+      if (i > 0) { try { const s = await rpc("admin_request_status", { p_name: pwd.slice(0, i), p_pwd: pwd.slice(i + 1) }); if (s.state === "pending") msg = "Ton compte attend d'être validé par l'administrateur principal"; } catch (_) {} }
+      pwd = ""; try { sessionStorage.removeItem("qpwd"); } catch (_) {}
+      return login(msg);
+    }
+    root.innerHTML = `<div class="empty">Serveur injoignable</div>`;
+  }
+}
+/* Champ mot de passe avec bouton Afficher/Masquer */
+const pwField = (id, label) => `<div><label class="f" for="${id}">${label}</label>
+  <div style="display:flex;gap:8px;align-items:center"><input type="password" id="${id}" required autocomplete="off" style="flex:1;min-width:0"><button class="btn sm" type="button" data-eye="${id}" aria-pressed="false">Afficher</button></div></div>`;
+function bindEyes() {
+  document.querySelectorAll("[data-eye]").forEach(b => b.onclick = () => {
+    const p = $("#" + b.dataset.eye), show = p.type === "password"; p.type = show ? "text" : "password";
+    b.textContent = show ? "Masquer" : "Afficher"; b.setAttribute("aria-pressed", show); p.focus();
+  });
 }
 function login(msg = "") {
   root.innerHTML = `<form class="login card stack" id="lf"><h1>Administration</h1>
-    <div><label class="f" for="p">Mot de passe</label>
-      <div style="display:flex;gap:8px;align-items:center"><input type="password" id="p" required autofocus style="flex:1;min-width:0"><button class="btn sm" type="button" id="eye" aria-pressed="false">Afficher</button></div></div>
-    <div class="err" role="alert">${esc(msg)}</div><button class="btn primary" type="submit">Entrer</button></form>`;
-  $("#eye").onclick = () => { const p = $("#p"), show = p.type === "password"; p.type = show ? "text" : "password"; $("#eye").textContent = show ? "Masquer" : "Afficher"; $("#eye").setAttribute("aria-pressed", show); p.focus(); };
+    <div><label class="f" for="u">Identifiant</label><input type="text" id="u" required autofocus autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    ${pwField("p", "Mot de passe")}
+    <div class="err" role="alert">${esc(msg)}</div><button class="btn primary" type="submit">Entrer</button>
+    <button class="btn ghost" type="button" id="newacc">Créer un compte</button></form>`;
+  bindEyes();
+  $("#newacc").onclick = () => signup();
   $("#lf").onsubmit = e => {
-    e.preventDefault(); pwd = $("#p").value;
+    e.preventDefault(); pwd = $("#u").value.trim() + ":" + $("#p").value;
     try { sessionStorage.setItem("qpwd", pwd); } catch (x) {}
     boot();
+  };
+}
+/* Demande de compte : rien n'est actif tant que l'administrateur principal n'a pas validé. */
+function signup(msg = "", ok = false, keep = "") {
+  if (ok) { root.innerHTML = `<div class="login card stack"><h1>Demande envoyée</h1><p class="meta">Ton compte sera actif quand l'administrateur principal l'aura validé. Reviens ensuite te connecter avec ton identifiant et ton mot de passe.</p><button class="btn primary" type="button" id="back">Retour à la connexion</button></div>`; $("#back").onclick = () => login(); return; }
+  root.innerHTML = `<form class="login card stack" id="sf"><h1>Créer un compte</h1>
+    <p class="meta">Choisis un identifiant et un mot de passe. Le compte ne sera créé qu'après validation par l'administrateur principal.</p>
+    <div><label class="f" for="su">Identifiant</label><input type="text" id="su" value="${esc(keep)}" required autofocus minlength="3" maxlength="40" pattern="[A-Za-z0-9._@\-]{3,40}" autocomplete="username" autocapitalize="none" spellcheck="false"><div class="meta">3 à 40 caractères : lettres, chiffres, . _ - @</div></div>
+    ${pwField("sp", "Mot de passe (8 caractères minimum)")}
+    ${pwField("sp2", "Confirme le mot de passe")}
+    <div class="err" role="alert">${esc(msg)}</div><button class="btn primary" type="submit">Envoyer la demande</button>
+    <button class="btn ghost" type="button" id="back">Retour</button></form>`;
+  bindEyes();
+  $("#back").onclick = () => login();
+  $("#sf").onsubmit = async e => {
+    e.preventDefault();
+    const name = $("#su").value.trim(), p1 = $("#sp").value, p2 = $("#sp2").value;
+    if (p1 !== p2) return signup("Les deux mots de passe sont différents", false, name);
+    try {
+      const d = await rpc("admin_request_account", { p_name: name, p_pwd: p1 });
+      if (d && d.error) return signup(d.error, false, name);
+      signup("", true);
+    } catch (x) { signup("Connexion impossible, réessaie", false, name); }
   };
 }
 
@@ -401,7 +447,7 @@ function render() {
   $("#curname").textContent = curName();
   $("#cQ").textContent = state.questions.length || "";
   $("#cR").textContent = state.answers.length || "";
-  $("#tabadmins").hidden = !all.main;
+  $("#tabadmins").hidden = !all.main; all.requests = all.requests || 0; setReqBadge();
   const P_ = all.perms || { edit: true, view: true, remove: true, library: true, verify: true };
   document.body.classList.toggle("no-edit", !P_.edit); document.body.classList.toggle("no-remove", !P_.remove);
   document.querySelector('[data-tab="results"]').hidden = !P_.view; document.querySelector('[data-tab="stats"]').hidden = !P_.view;
@@ -424,7 +470,10 @@ const PERMS = [
 ];
 const permBoxes = (perms, attr) => PERMS.map(([k, l]) => `<label class="meta row" style="gap:8px;align-items:flex-start"><input type="checkbox" ${attr}="${k}"${perms[k] ? " checked" : ""}> <span>${l}</span></label>`).join("");
 function adminsView() {
-  return `<div class="card stack"><div class="q-text">Administrateurs</div>
+  return `<div class="card stack" id="reqcard" hidden><div class="q-text">Demandes de compte</div>
+      <div class="meta">Ces personnes ont demandé un compte. Rien n'est actif tant que tu n'as pas validé. Choisis ce qu'elles pourront faire, puis valide ou refuse.</div>
+      <div id="rlist"></div></div>
+    <div class="card stack"><div class="q-text">Administrateurs</div>
       <div class="meta">Chaque administrateur a son mot de passe. Tu choisis ici ce que chacun a le droit de faire, et tu peux le changer à tout moment : c'est pris en compte à son prochain geste. Toi (mot de passe principal), tu peux tout faire.</div>
       <div id="alist"><div class="meta">Chargement</div></div></div>
     <form class="card stack" id="aform">
@@ -456,7 +505,28 @@ function showAdmins(list) {
     catch (x) { msg.textContent = x.message; c.checked = !c.checked; }
   });
 }
+function showRequests(list) {
+  const card = $("#reqcard"), box = $("#rlist"); if (!card) return;
+  all.requests = list.length; setReqBadge();
+  card.hidden = !list.length;
+  box.innerHTML = list.map(x => `<div class="card stack" style="margin:0" data-req="${esc(x.name)}"><div><div class="q-text">${esc(x.name)}</div><div class="meta">Demandé le ${dateOnly(x.at)}</div></div>
+      <div class="stack" style="gap:8px">${permBoxes({ edit: true, view: true, verify: true }, "data-rperm")}</div>
+      <div class="row"><button class="btn sm primary" data-ok="${esc(x.name)}">Valider</button><button class="btn sm ghost danger" data-no="${esc(x.name)}">Refuser</button></div></div>`).join("");
+  box.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
+    const card = b.closest("[data-req]"), perms = {};
+    card.querySelectorAll("[data-rperm]").forEach(i => perms[i.dataset.rperm] = i.checked);
+    try { showRequests(await api("POST", "/api/admin/requests/" + encodeURIComponent(b.dataset.ok) + "/approve", { perms })); showAdmins(await api("GET", "/api/admin/admins")); }
+    catch (x) { await notice(x.message); }
+  });
+  box.querySelectorAll("[data-no]").forEach(b => b.onclick = async () => {
+    if (!(await askConfirm("Refuser la demande de « " + b.dataset.no + " » ?", "Refuser"))) return;
+    try { showRequests(await api("DELETE", "/api/admin/requests/" + encodeURIComponent(b.dataset.no))); }
+    catch (x) { await notice(x.message); }
+  });
+}
+function setReqBadge() { const t = $("#tabadmins"); if (t) t.innerHTML = "Administrateurs" + (all.requests ? `<span class="count">${all.requests}</span>` : ""); }
 async function loadAdmins() {
+  try { showRequests(await api("GET", "/api/admin/requests")); } catch (_) {}
   try { showAdmins(await api("GET", "/api/admin/admins")); }
   catch (x) { const b = $("#alist"); if (b) b.innerHTML = `<div class="err">${esc(x.message)}</div>`; }
   const f = $("#aform"); if (!f) return;

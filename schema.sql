@@ -78,16 +78,28 @@ revoke all on admins from anon, authenticated;
 -- Après 10 échecs en 10 minutes, tout est refusé.
 create or replace function _admin_who(p_pwd text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare h text; r record;
+declare h text; mu text; r record; u text := ''; pw text; i int;
 begin
   if (select count(*) from auth_fail where at > now() - interval '10 minutes') >= 10 then return null; end if;
+  -- p_pwd = "identifiant:mot de passe" (l'identifiant ne contient pas de « : »)
+  p_pwd := coalesce(p_pwd, '');
+  i := position(':' in p_pwd);
+  if i > 0 then u := lower(btrim(left(p_pwd, i - 1))); pw := substr(p_pwd, i + 1); else pw := p_pwd; end if;
   select value into h from settings where key = 'admin_hash';
-  if h is not null and crypt(coalesce(p_pwd, ''), h) = h then return jsonb_build_object('level', 'main'); end if;
-  for r in select name, hash, perms from admins loop
-    if crypt(coalesce(p_pwd, ''), r.hash) = r.hash then
-      return jsonb_build_object('level', 'sub', 'name', r.name, 'perms', r.perms);
+  select value into mu from settings where key = 'admin_user';
+  mu := lower(coalesce(mu, 'admin'));
+  if u <> '' then
+    if u = mu then
+      if h is not null and crypt(pw, h) = h then return jsonb_build_object('level', 'main'); end if;
+    else
+      select name, hash, perms into r from admins where lower(name) = u;
+      if found and crypt(pw, r.hash) = r.hash then
+        return jsonb_build_object('level', 'sub', 'name', r.name, 'perms', r.perms);
+      end if;
     end if;
-  end loop;
+  end if;
+  -- Compatibilité (sauvegarde automatique, scripts) : le mot de passe principal seul est accepté.
+  if h is not null and crypt(p_pwd, h) = h then return jsonb_build_object('level', 'main'); end if;
   insert into auth_fail default values;
   delete from auth_fail where at < now() - interval '1 day';
   return null;
@@ -267,6 +279,7 @@ begin
   perform _purge();
   return jsonb_build_object(
     'main', main_,
+    'requests', case when main_ then (select count(*) from admin_requests) else 0 end,
     'perms', case when main_ then '{"edit":true,"view":true,"remove":true,"library":true,"verify":true}'::jsonb else _clean_perms(who_->'perms') end,
     'groups', (select jsonb_object_agg(role, jsonb_build_object('questions', questions, 'active', active, 'video', video)) from groups),
     'answers', case when seeing then coalesce((select jsonb_agg(_answer_view(to_jsonb(a) - 'id') order by a.at, a.id) from answers a), '[]'::jsonb) else '[]'::jsonb end,
@@ -427,7 +440,13 @@ declare lvl text := _admin_level(p_pwd); nm text := btrim(coalesce(p_name, ''));
 begin
   if lvl is null then return jsonb_build_object('error', 'auth'); end if;
   if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
-  if nm = '' or length(nm) > 40 then return jsonb_build_object('error', 'Nom de 1 à 40 caractères'); end if;
+  if nm !~ '^[A-Za-z0-9._@-]{3,40}$' then
+    return jsonb_build_object('error', 'Identifiant : 3 à 40 caractères (lettres, chiffres, . _ - @)');
+  end if;
+  if lower(nm) = lower(coalesce((select value from settings where key = 'admin_user'), 'admin'))
+     or exists (select 1 from admin_requests where lower(name) = lower(nm)) then
+    return jsonb_build_object('error', 'Cet identifiant existe déjà');
+  end if;
   if length(coalesce(p_new, '')) < 8 or length(p_new) > 200 then
     return jsonb_build_object('error', 'Mot de passe : 8 caractères minimum');
   end if;
@@ -464,6 +483,91 @@ begin
   return _admins_list();
 end $$;
 
+-- ---- Demandes de compte administrateur : créées par la personne, activées seulement si le principal valide ----
+create table if not exists admin_requests (
+  name text primary key,
+  hash text not null,
+  at timestamptz not null default now()
+);
+alter table admin_requests enable row level security;
+revoke all on admin_requests from anon, authenticated;
+
+create or replace function _requests_list() returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('name', name, 'at', at) order by at), '[]'::jsonb) from admin_requests
+$$;
+
+-- Ouverte à tous : la personne choisit un identifiant et un mot de passe. Rien n'est actif tant que le principal n'a pas validé.
+create or replace function admin_request_account(p_name text, p_pwd text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare nm text := btrim(coalesce(p_name, ''));
+begin
+  if nm !~ '^[A-Za-z0-9._@-]{3,40}$' then
+    return jsonb_build_object('error', 'Identifiant : 3 à 40 caractères (lettres, chiffres, . _ - @)');
+  end if;
+  if length(coalesce(p_pwd, '')) < 8 or length(p_pwd) > 200 then
+    return jsonb_build_object('error', 'Mot de passe : 8 caractères minimum');
+  end if;
+  delete from admin_requests where at < now() - interval '30 days';
+  if lower(nm) = lower(coalesce((select value from settings where key = 'admin_user'), 'admin'))
+     or exists (select 1 from admins where lower(name) = lower(nm))
+     or exists (select 1 from admin_requests where lower(name) = lower(nm)) then
+    return jsonb_build_object('error', 'Cet identifiant est déjà pris');
+  end if;
+  if (select count(*) from admin_requests) >= 20 then
+    return jsonb_build_object('error', 'Trop de demandes en attente, réessaie plus tard');
+  end if;
+  insert into admin_requests (name, hash) values (nm, crypt(p_pwd, gen_salt('bf')));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Pour dire à la personne que son compte attend la validation (le mot de passe doit être le bon).
+create or replace function admin_request_status(p_name text, p_pwd text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare r admin_requests;
+begin
+  select * into r from admin_requests where lower(name) = lower(btrim(coalesce(p_name, '')));
+  if not found then return jsonb_build_object('state', 'none'); end if;
+  if crypt(coalesce(p_pwd, ''), r.hash) = r.hash then return jsonb_build_object('state', 'pending'); end if;
+  insert into auth_fail default values;
+  return jsonb_build_object('state', 'none');
+end $$;
+
+create or replace function admin_list_requests(p_pwd text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd);
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  return _requests_list();
+end $$;
+
+create or replace function admin_approve_request(p_pwd text, p_name text, p_perms jsonb default null) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd); r admin_requests;
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  select * into r from admin_requests where name = p_name;
+  if not found then return jsonb_build_object('error', 'Demande introuvable'); end if;
+  if exists (select 1 from admins where lower(name) = lower(r.name)) then
+    return jsonb_build_object('error', 'Cet identifiant existe déjà');
+  end if;
+  insert into admins (name, hash, perms)
+    values (r.name, r.hash, _clean_perms(coalesce(p_perms, '{"edit":true,"view":true,"verify":true}'::jsonb)));
+  delete from admin_requests where name = r.name;
+  return _requests_list();
+end $$;
+
+create or replace function admin_reject_request(p_pwd text, p_name text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare lvl text := _admin_level(p_pwd);
+begin
+  if lvl is null then return jsonb_build_object('error', 'auth'); end if;
+  if lvl <> 'main' then return jsonb_build_object('error', 'Réservé à l''administrateur principal'); end if;
+  delete from admin_requests where name = p_name;
+  return _requests_list();
+end $$;
+
 -- ---- RGPD : la personne supprime elle-même ses données (code + e-mail du pass) ----
 create or replace function delete_my_data(p_code text, p_email text) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -481,7 +585,7 @@ begin
 end $$;
 
 -- Les fonctions internes (préfixe _) ne sont pas appelables depuis le site.
-revoke execute on function _admin_who(text), _admin_deny(text, text), _clean_perms(jsonb), _admin_level(text), _admin_ok(text), _purge(), _admins_list(), _find_answer(text), _answer_view(jsonb), _saved_list(), _snapshot_into(text, text) from public, anon, authenticated;
+revoke execute on function _requests_list(), _admin_who(text), _admin_deny(text, text), _clean_perms(jsonb), _admin_level(text), _admin_ok(text), _purge(), _admins_list(), _find_answer(text), _answer_view(jsonb), _saved_list(), _snapshot_into(text, text) from public, anon, authenticated;
 
 -- Droits explicites : seules ces fonctions sont appelables depuis le site (clé anon), quels que soient
 -- les réglages "Data API" du projet. Les tables, elles, ne sont pas accessibles directement.
@@ -494,5 +598,7 @@ grant execute on function
   admin_clear_answers(text, text), admin_revoke(text, text), admin_saved_list(text), admin_save_current(text, text),
   admin_open_saved(text, text), admin_delete_saved(text, text),
   admin_list_admins(text), admin_add_admin(text, text, text, jsonb), admin_set_perms(text, text, jsonb), admin_remove_admin(text, text),
+  admin_request_account(text, text), admin_request_status(text, text), admin_list_requests(text),
+  admin_approve_request(text, text, jsonb), admin_reject_request(text, text),
   delete_my_data(text, text)
 to anon;
