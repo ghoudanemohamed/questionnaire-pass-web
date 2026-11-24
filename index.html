@@ -93,7 +93,7 @@ let kept = {}, who = null, tries = 0;
 /* Étape 1 : informations, puis la vidéo se lance */
 const infoCard = () => `<div class="card stack">
   <p class="sub" style="margin:0;font-size:13px">Les champs marqués * sont obligatoires.</p>
-  <div><label class="f" for="company">Entreprise (facultatif)</label><input type="text" id="company" name="company" autocomplete="organization" maxlength="100"></div>
+  <div><label class="f" for="company">Entreprise *</label><input type="text" id="company" name="company" autocomplete="organization" required maxlength="100"></div>
   <div class="two">
     <div><label class="f" for="last">Nom *</label><input type="text" id="last" name="last" autocomplete="family-name" required maxlength="100"></div>
     <div><label class="f" for="first">Prénom *</label><input type="text" id="first" name="first" autocomplete="given-name" required maxlength="100"></div>
@@ -113,7 +113,7 @@ const getWho = fd => { const g = k => String(fd.get(k) || "").trim();
   return { company: g("company"), last: g("last"), first: g("first"), phone: g("phone"), email: g("email"), role: g("role") }; };
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/, PHONE_RE = /^(?:0|\+33|0033)[1-9]\d{8}$/;
 function infoError(w) {
-  if (!w.last || !w.first) return "Remplis le nom et le prénom";
+  if (!w.company || !w.last || !w.first) return "Remplis l'entreprise, le nom et le prénom";
   if (!EMAIL_RE.test(w.email)) return "L'e-mail doit contenir un @ et un domaine, par exemple nom@societe.fr";
   if (!PHONE_RE.test(w.phone.replace(/[ .\-()\/]/g, ""))) return "Le téléphone doit avoir 10 chiffres, par exemple 06 12 34 56 78";
   if (!w.role) return "Choisis visiteur ou intervenant";
