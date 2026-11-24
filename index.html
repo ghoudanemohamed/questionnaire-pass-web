@@ -42,6 +42,7 @@ input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);
 .roles{border:0;padding:0;margin:0;min-width:0}.roles legend{padding:0}
 .roles .opt+.opt{margin-top:8px}
 @media(max-width:480px){.two{grid-template-columns:1fr}}
+@media(max-width:480px){#go{position:sticky;bottom:12px;z-index:5;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.45)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 .player{padding:0;overflow:hidden;aspect-ratio:16/9}
@@ -91,33 +92,35 @@ let kept = {}, who = null, tries = 0;
 
 /* Étape 1 : informations, puis la vidéo se lance */
 const infoCard = () => `<div class="card stack">
-  <div><label class="f" for="company">Entreprise</label><input type="text" id="company" name="company" autocomplete="organization" required maxlength="100"></div>
+  <p class="sub" style="margin:0;font-size:13px">Les champs marqués * sont obligatoires.</p>
+  <div><label class="f" for="company">Entreprise (facultatif)</label><input type="text" id="company" name="company" autocomplete="organization" maxlength="100"></div>
   <div class="two">
-    <div><label class="f" for="last">Nom</label><input type="text" id="last" name="last" autocomplete="family-name" required maxlength="100"></div>
-    <div><label class="f" for="first">Prénom</label><input type="text" id="first" name="first" autocomplete="given-name" required maxlength="100"></div>
+    <div><label class="f" for="last">Nom *</label><input type="text" id="last" name="last" autocomplete="family-name" required maxlength="100"></div>
+    <div><label class="f" for="first">Prénom *</label><input type="text" id="first" name="first" autocomplete="given-name" required maxlength="100"></div>
   </div>
   <div class="two">
-    <div><label class="f" for="phone">Téléphone</label><input type="tel" id="phone" name="phone" autocomplete="tel" required maxlength="30" pattern="[0-9+()./ \-]{6,30}"></div>
-    <div><label class="f" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" required maxlength="200"></div>
+    <div><label class="f" for="phone">Téléphone *</label><input type="tel" id="phone" name="phone" autocomplete="tel" required maxlength="30" pattern="[0-9+()./ \-]{6,30}"></div>
+    <div><label class="f" for="email">E-mail *</label><input type="email" id="email" name="email" autocomplete="email" required maxlength="200"></div>
   </div>
   <fieldset class="roles"><legend class="f">Vous êtes</legend>
     <label class="opt"><input type="radio" name="role" value="visiteur" required${open_.visiteur ? "" : " disabled"}><span>Visiteur${open_.visiteur ? "" : " · fermé"}</span></label>
     <label class="opt"><input type="radio" name="role" value="intervenant"${open_.intervenant ? "" : " disabled"}><span>Intervenant${open_.intervenant ? "" : " · fermé"}</span></label>
   </fieldset>
-  <label class="opt"><input type="checkbox" name="consent" value="1" required><span style="font-size:14px">J'accepte que mes données servent à délivrer mon pass, conservées 12 mois. <a href="confidentialite.html" target="_blank" rel="noopener">En savoir plus et me supprimer</a></span></label>
+  <label class="opt" style="align-items:flex-start"><input type="checkbox" name="consent" value="1" required><span style="font-size:14px">J'accepte que mes données servent à délivrer mon pass, conservées 12 mois.</span></label>
+  <p style="font-size:13px;margin:0 0 0 12px"><a href="confidentialite.html" target="_blank" rel="noopener">En savoir plus et me supprimer</a></p>
 </div>`;
 const getWho = fd => { const g = k => String(fd.get(k) || "").trim();
   return { company: g("company"), last: g("last"), first: g("first"), phone: g("phone"), email: g("email"), role: g("role") }; };
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/, PHONE_RE = /^(?:0|\+33|0033)[1-9]\d{8}$/;
 function infoError(w) {
-  if (!w.company || !w.last || !w.first) return "Remplis l'entreprise, le nom et le prénom";
+  if (!w.last || !w.first) return "Remplis le nom et le prénom";
   if (!EMAIL_RE.test(w.email)) return "L'e-mail doit contenir un @ et un domaine, par exemple nom@societe.fr";
   if (!PHONE_RE.test(w.phone.replace(/[ .\-()\/]/g, ""))) return "Le téléphone doit avoir 10 chiffres, par exemple 06 12 34 56 78";
   if (!w.role) return "Choisis visiteur ou intervenant";
   return "";
 }
 function intro() {
-  app.innerHTML = `<h1>Questionnaire</h1><p class="sub">Renseigne tes informations : le questionnaire de ton rôle s'affiche ensuite, après la vidéo s'il y en a une.</p>
+  app.innerHTML = `<h1>Ton pass pour Pass sécurité</h1><p class="sub">Renseigne tes informations : le questionnaire de ton rôle s'affiche ensuite, après la vidéo s'il y en a une.</p>
   <form id="i" class="stack" novalidate>${infoCard()}<div class="err" id="ierr" role="alert"></div><button class="btn" type="submit" id="go">Continuer</button></form>`;
   /* Brouillon : les informations saisies reviennent après un rafraîchissement de la page */
   const form_ = document.getElementById("i"), DRAFT = "qp-draft";
@@ -238,7 +241,9 @@ async function send(e) {
       <div class="code" aria-label="Ton code">${esc(d.code)}</div><span class="meta">Ton code personnel, valable 6 mois : garde-le</span>
       <div style="margin-top:24px"><button class="btn" id="pdf" type="button">Télécharger mon pass en PDF</button></div>
       <div style="margin-top:12px"><a class="btn" style="display:inline-flex;align-items:center;text-decoration:none;background:transparent;border:1px solid rgba(255,255,255,.2)" href="mon-pass.html?c=${encodeURIComponent(d.code)}">Garder mon pass sur mon téléphone</a></div>
+      <div style="margin-top:12px"><button class="btn" id="again" type="button" style="background:transparent;border:1px solid rgba(255,255,255,.2);box-shadow:none">Inscrire une autre personne</button></div>
       <div class="err" id="pdferr" role="alert"></div></div>`;
+    document.getElementById("again").onclick = () => { who = null; kept = {}; tries = 0; intro(); };
     try { localStorage.setItem("qp-code", d.code); } catch (_) {}
     document.getElementById("pdf").onclick = () => {
       try { makePassPdf(d); } catch (x) { document.getElementById("pdferr").textContent = x.message; }

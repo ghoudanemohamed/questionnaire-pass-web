@@ -20,7 +20,7 @@ create table if not exists answers (
   code text not null unique,
   at timestamptz not null default now(),
   role text not null check (role in ('visiteur', 'intervenant')),
-  first text not null, last text not null, company text not null,
+  first text not null, last text not null, company text,
   phone text not null, email text not null,
   tries int not null default 1,
   r jsonb not null default '{}'
@@ -189,9 +189,9 @@ declare
   v_phone text; v_ym text; v_n int; v_code text; a answers;
 begin
   if p_role not in ('visiteur', 'intervenant') then return jsonb_build_object('error', 'Rôle inconnu'); end if;
-  if btrim(coalesce(p_company, '')) = '' or btrim(coalesce(p_last, '')) = '' or btrim(coalesce(p_first, '')) = ''
-     or length(p_company) > 100 or length(p_last) > 100 or length(p_first) > 100 then
-    return jsonb_build_object('error', 'Entreprise, nom et prénom obligatoires');
+  if btrim(coalesce(p_last, '')) = '' or btrim(coalesce(p_first, '')) = ''
+     or length(coalesce(p_company, '')) > 100 or length(p_last) > 100 or length(p_first) > 100 then
+    return jsonb_build_object('error', 'Nom et prénom obligatoires');
   end if;
   if btrim(coalesce(p_email, '')) !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(p_email) > 200 then
     return jsonb_build_object('error', 'Adresse e-mail invalide');
@@ -247,7 +247,7 @@ begin
   if v_n > 9999 then raise exception 'Limite de 9999 participants atteinte pour ce mois'; end if;
   v_code := (case when p_role = 'intervenant' then 'I' else 'V' end) || v_ym || lpad(v_n::text, 4, '0');
   insert into answers (code, role, first, last, company, phone, email, tries, r)
-    values (v_code, p_role, btrim(p_first), btrim(p_last), btrim(p_company), v_phone, btrim(p_email),
+    values (v_code, p_role, btrim(p_first), btrim(p_last), nullif(btrim(coalesce(p_company, '')), ''), v_phone, btrim(p_email),
             greatest(1, least(coalesce(p_tries, 1), 1000)), clean)
     returning * into a;
   return jsonb_build_object('ok', true, 'code', v_code, 'role', p_role, 'first', a.first, 'last', a.last,
